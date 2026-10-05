@@ -90,6 +90,10 @@ In pratica:
 
 L'analogia più semplice viene dalle cache di memoria: un *hit* avviene quando il dato richiesto è già disponibile nella cache, un *miss* quando deve essere ricalcolato o recuperato dalla fonte originale ([introduzione generale ai cache hit](https://www.geeksforgeeks.org/computer-organization-architecture/cache-hits-in-memory-organization/)). Nel prompt caching l'idea è simile, ma non viene recuperata una risposta pronta: si riusa il calcolo del prefisso e il modello elabora comunque la parte nuova e genera una nuova risposta. Inoltre, per la cache del prompt conta la corrispondenza del prefisso secondo le regole del provider; due richieste semanticamente simili non bastano.
 
+![Schema del prompt caching: la prima richiesta scrive il prefisso stabile; una richiesta successiva riusa il prefisso compatibile, elabora i dati nuovi e genera una risposta nuova.](assets/prompt-caching-flow.png)
+
+*Figura. Il prompt caching riusa il calcolo del prefisso, non una risposta precedente.*
+
 Il prezzo del write e del read dipende dal provider, dal modello e, in alcuni casi, dal tempo di conservazione. Per esempio, nella tabella Cursor consultata il 4 ottobre 2026 GPT-5.6 Terra è indicato a $2 per milione di token input, $2,50 per milione di cache write e $0,20 per milione di cache read. Per Anthropic le tariffe di scrittura cambiano anche in base alla durata della cache. Sono esempi datati, non prezzi universali: controlla la pagina [Models & Pricing](https://cursor.com/docs/models-and-pricing) prima di fare confronti.
 
 #### Perché i cache read possono superare la finestra di contesto
@@ -183,6 +187,10 @@ La conseguenza pratica è curare qualità e pertinenza, non solo capienza:
 - fai un checkpoint o una sintesi quando cambia fase, non solo quando la finestra è quasi piena;
 - dopo la sintesi, verifica che i fatti importanti e i riferimenti ai file siano ancora presenti;
 - considera delega o chat separata per esplorazioni indipendenti solo se il risultato torna come breve elenco di file e fatti verificabili: più agenti non significano automaticamente meno token o costo.
+
+![Infografica sulla selezione del contesto: file, errori, vincoli e tool pertinenti passano nel prompt focalizzato; log completi, tool inutili e tentativi superati restano fuori.](assets/context-signal-not-volume.png)
+
+*Figura. Ridurre il rumore è una buona pratica di context engineering, non una garanzia matematica di maggiore affidabilità.*
 
 La compattazione può rendere il contesto più maneggevole, ma non annulla eventuali errori già introdotti né garantisce che la sintesi conservi ogni dettaglio. Per questo prevenire rumore e controllare i checkpoint resta utile anche con una finestra ampia.
 
@@ -434,6 +442,10 @@ Per aumentare la specificità senza gonfiare il prompt, includi solo gli element
 - criterio di accettazione o verifica.
 
 Non serve compilare tutti i campi per ogni micro-task: "Rinomina `userID` in `userId` in questo file" è già concreto. Al contrario, un prompt lungo può restare poco specifico se contiene molto contesto senza dire quale risultato ottenere. Considera il punteggio come un segnale da confrontare con correttezza al primo tentativo, chiarimenti, tool call, retry e costo per risultato riuscito; non come un obiettivo da massimizzare aggiungendo dettagli irrilevanti.
+
+![Schema di un flusso efficace: richiesta con obiettivo, file, vincoli e verifica; un agente attraversa una fase coerente; al checkpoint un handoff conciso può trasferire stato, decisioni, test e prossimo passo.](assets/specific-prompt-handoff.png)
+
+*Figura. Specificità utile e continuità del lavoro riducono ambiguità; se serve cambiare agente, un checkpoint rende esplicito lo stato da trasferire.*
 
 ### Ridurre l'output senza impoverire il lavoro
 
