@@ -18,13 +18,7 @@
 
 ## Introduzione
 
-La guida parte da token e contesto, poi passa alle scelte pratiche in Cursor: formulare richieste mirate, gestire le conversazioni lunghe, capire il caching e scegliere modello ed effort. Puoi leggerla in ordine oppure usare l'indice per raggiungere subito l'argomento che ti serve.
-
-Risparmiare token vuol dire ridurre il **costo per risultato riuscito**. Una risposta breve o un modello economico non bastano se poi servono altri tentativi o correzioni. Conta arrivare a una soluzione verificata con il contesto e il livello di ragionamento adatti al task.
-
-In Cursor il consumo dipende da ciò che viene inviato al modello e da ciò che il modello genera. Incidono anche la cache, il modello scelto e i passaggi dell'agente. Prezzi e modalità di conteggio possono cambiare in base al piano; per i valori aggiornati consulta [Models & Pricing](https://cursor.com/docs/models-and-pricing).
-
-Come regola pratica, fornisci il contesto utile al task, mantieni stabile il flusso di lavoro e valuta il costo dell'intero risultato.
+Scrivere un prompt corto non basta a spendere meno. Il modello può ricevere anche cronologia, file e risultati dei tool, e l'agente può fare più chiamate prima di chiudere il task. Per questo guarda il **costo per risultato riuscito**: una tariffa bassa serve a poco se poi occorrono retry o correzioni. Prezzi e modalità di conteggio dipendono dal piano; per i valori aggiornati consulta [Models & Pricing](https://cursor.com/docs/models-and-pricing).
 
 ## In breve
 
