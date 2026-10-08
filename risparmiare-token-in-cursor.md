@@ -18,7 +18,7 @@
 
 ## Introduzione
 
-Scrivere un prompt corto non basta a spendere meno. Il modello può ricevere anche cronologia, file e risultati dei tool, e l'agente può fare più chiamate prima di chiudere il task. Per questo guarda il **costo per risultato riuscito**: una tariffa bassa serve a poco se poi occorrono retry o correzioni. Prezzi e modalità di conteggio dipendono dal piano; per i valori aggiornati consulta [Models & Pricing](https://cursor.com/docs/models-and-pricing).
+Quando chiedi a Cursor di scrivere o modificare codice, il modello AI che hai selezionato in Cursor elabora la richiesta e genera una risposta o una modifica. Oltre al testo che hai scritto, Cursor può inviargli la cronologia della chat, le istruzioni del progetto e i file coinvolti. Quando usi Agent, l'agente può fare altre chiamate al modello mentre esplora il codice o verifica il risultato. Il consumo di token dipende dal testo inviato, da quello generato e dal numero di chiamate. Prezzi e modalità di conteggio variano in base al piano; i dettagli aggiornati sono nella pagina [Models & Pricing](https://cursor.com/docs/models-and-pricing).
 
 ## In breve
 
