@@ -18,56 +18,52 @@
 
 ## Introduzione
 
-Questa guida parte dai concetti fondamentali — token e contesto — e procede verso pratiche via via più specifiche per lavorare in Cursor: ridurre il consumo delle richieste, gestire conversazioni lunghe, favorire i cache hit e scegliere modello ed effort in modo consapevole. Puoi leggerla dall'inizio per costruire una visione completa oppure consultare l'indice per trovare una pratica precisa.
+La guida parte da token e contesto, poi passa alle scelte pratiche in Cursor: formulare richieste mirate, gestire le conversazioni lunghe, capire il caching e scegliere modello ed effort. Puoi leggerla in ordine oppure usare l'indice per raggiungere subito l'argomento che ti serve.
 
-Risparmiare token non significa chiedere sempre la risposta più corta o scegliere automaticamente il modello con il prezzo più basso. L'obiettivo corretto è ridurre il **costo per risultato riuscito**: il lavoro deve arrivare alla soluzione con pochi passaggi inutili, poco contesto irrilevante e un livello di ragionamento proporzionato alla difficoltà.
+Risparmiare token vuol dire ridurre il **costo per risultato riuscito**. Una risposta breve o un modello economico non bastano se poi servono altri tentativi o correzioni. Conta arrivare a una soluzione verificata con il contesto e il livello di ragionamento adatti al task.
 
-In Cursor il consumo dipende dal contenuto inviato al modello, da ciò che il modello genera, dalle eventuali cache, dal modello scelto e dal numero di passaggi dell'agente. Il prezzo e le modalità di conteggio cambiano nel tempo e possono dipendere dal piano: per i valori aggiornati va consultata la pagina ufficiale [Models & Pricing](https://cursor.com/docs/models-and-pricing).
+In Cursor il consumo dipende da ciò che viene inviato al modello e da ciò che il modello genera. Incidono anche la cache, il modello scelto e i passaggi dell'agente. Prezzi e modalità di conteggio possono cambiare in base al piano; per i valori aggiornati consulta [Models & Pricing](https://cursor.com/docs/models-and-pricing).
 
-La regola più utile è questa:
-
-> Dai all'agente il contesto minimo che gli permette di fare bene il lavoro, mantieni stabile il flusso mentre il task è in corso e misura il costo del risultato completo, non solo quello della singola risposta.
+Come regola pratica, fornisci il contesto utile al task, mantieni stabile il flusso di lavoro e valuta il costo dell'intero risultato.
 
 ## In breve
 
-- Un token non è una parola: è un'unità di testo determinata dal tokenizer del modello.
-- Il contesto è molto più del prompt: comprende cronologia, file, regole, tool, output dei tool, MCP, skill e istruzioni di sistema.
-- La *prompt specificity* misura quanto la richiesta sia concreta e attuabile, non quanto è lunga.
-- Il numero di `cache read` può superare la finestra del modello: nel dashboard può essere il totale di molte chiamate interne, non la dimensione di un singolo prompt.
-- Ogni esplorazione, chiamata a un tool, errore e retry può aggiungere nuovi token e nuovi passaggi.
-- Tool MCP e istruzioni di skill possono occupare contesto anche quando non servono al task corrente.
-- Per modifiche locali valuta Tab o inline edit; usa Agent per richieste che richiedono esplorazione o più passaggi, secondo le funzioni incluse nel tuo piano.
-- Una nuova chat aiuta a separare task indipendenti, ma non è un reset gratuito né una garanzia di costo inferiore.
-- Le skill native circoscritte al task sono spesso più facili da ottimizzare di un grande file di regole sempre attivo; JSON da solo non garantisce meno token.
-- Un task coerente dovrebbe restare con lo stesso agente o modello fino a un checkpoint naturale.
-- Cambiare agente nel mezzo non è vietato da Cursor, ma può costringere il nuovo agente a ricostruire decisioni, stato e contesto. Se il cambio è necessario, prepara un handoff.
-- Il confronto corretto è tra configurazioni che completano lo stesso lavoro: costo, qualità, passaggi, tempo e rework.
+- I token sono unità di testo definite dal tokenizer del modello; non corrispondono sempre a parole intere.
+- Nel contesto possono entrare cronologia, file, regole, tool, risultati, MCP, skill e istruzioni di sistema.
+- La *prompt specificity* indica quanto una richiesta sia concreta e attuabile.
+- `Cache read` può sommare le letture di più chiamate interne e superare la finestra di una singola richiesta.
+- Esplorazioni, chiamate ai tool, errori e retry aggiungono passaggi e possono aumentare il consumo.
+- Disattiva MCP e skill che non servono al task. Per una modifica locale valuta Tab o l'editing inline; usa Agent se occorre esplorare o fare più passaggi.
+- Una chat nuova separa task indipendenti, ma può richiedere di reinviare regole, file e stato.
+- Skill mirate sono più semplici da mantenere di un grande file di regole sempre attivo. Il formato JSON, da solo, non riduce i token.
+- Mantieni agente o modello durante una fase di lavoro. Se li cambi, passa decisioni e stato con un handoff.
+- Confronta configurazioni che completano lo stesso task e considera costo, qualità, passaggi, tempo e rework.
 
 ## 1. Token: che cosa sono
 
-I modelli linguistici non elaborano il testo come una sequenza di parole intere. Lo dividono in **token**, che possono essere parole brevi, parti di parole, spazi, punteggiatura o simboli. La tokenizzazione dipende dal modello, dal suo encoding e dalla lingua: una stima basata sul numero di parole è quindi solo orientativa.
+I modelli linguistici dividono il testo in **token**, che possono corrispondere a parole brevi, parti di parole, spazi, segni di punteggiatura o simboli. Il risultato dipende dal modello, dal suo encoding e dalla lingua. Contare le parole dà quindi solo una stima approssimativa.
 
 [OpenAI spiega](https://help.openai.com/en/articles/4936856-understanding-and-counting-tokens) che un token può rappresentare un carattere, una parte di parola, una parola o un segno di punteggiatura; inoltre il conteggio del testo semplice non coincide necessariamente con quello della richiesta completa, perché contano anche ruoli dei messaggi, tool, schemi, file e immagini.
 
 Per l'italiano, il codice e i nomi tecnici le stime molto approssimative come "un token ogni qualche carattere" possono essere fuorvianti. Per dati reali usa il conteggio mostrato da Cursor o il tokenizer del modello interessato.
 
-### La lingua può cambiare il conteggio, ma non scegliere solo in base a questo
+### Lingua e tokenizzazione
 
-Alcuni tokenizer rappresentano l'inglese in modo più compatto, perché il vocabolario e i dati usati per costruirli possono favorire sequenze inglesi frequenti. Il divario, però, dipende da tokenizer, modello, testo e task: le percentuali pubblicate non si trasferiscono automaticamente da una lingua o da un modello all'altro. Per esempio, la stima del 25–55% citata da Paul Simmering riguarda prompt giapponesi riscritti in inglese su alcuni modelli occidentali, non prompt italiani in Cursor. Le tabelle generiche che assegnano un rapporto fisso fra lingua e token sono indicative, non previsioni valide per ogni modello e testo.
+Alcuni tokenizer codificano l'inglese in modo più compatto, anche perché le sequenze inglesi frequenti possono essere meglio rappresentate nel loro vocabolario. La differenza cambia però con modello, tokenizer, testo e task. Per esempio, la stima dal 25% al 55% citata da Paul Simmering riguarda prompt giapponesi riscritti in inglese su alcuni modelli occidentali; non descrive prompt italiani in Cursor. Le tabelle che assegnano un rapporto fisso fra lingua e token sono indicative.
 
-Non tradurre automaticamente in inglese per risparmiare. Una traduzione può perdere sfumature; se la chiedi al modello, può aggiungere un passaggio e token. In ogni caso, non riduce il contesto del repository già inviato, che può includere codice, commenti e documentazione. Se il task è ripetuto e il risparmio può contare, confronta due formulazioni semanticamente equivalenti con il tokenizer del modello scelto o con l'uso effettivo mostrato da Cursor; mantieni la lingua in cui sai esprimere meglio requisiti e vincoli. Non abbreviare identificatori o codice per inseguire un conteggio minore.
+Tradurre ogni richiesta in inglese può far perdere sfumature e, se la traduzione la fa il modello, aggiunge un passaggio. Inoltre non riduce il contesto del repository, che può includere codice, commenti e documentazione. Se ripeti spesso lo stesso task, puoi confrontare due formulazioni equivalenti con il tokenizer del modello o con i dati di utilizzo di Cursor. Scegli la lingua in cui riesci a esprimere meglio requisiti e vincoli; non abbreviare identificatori o codice per ridurre il conteggio.
 
 ## 2. Contesto: definizione e composizione
 
 ### Finestra di contesto
 
-La **finestra di contesto** è la quantità massima di token che il modello può considerare in una richiesta, includendo input e spazio riservato all'output. Non è un credito e non è una misura diretta della qualità: una finestra grande permette di includere più materiale, ma non rende automaticamente utile tutto quel materiale.
+La **finestra di contesto** è il numero massimo di token che il modello può considerare in una richiesta, compresi input e spazio riservato all'output. Una finestra più ampia permette di includere più materiale, ma non rende quel materiale automaticamente utile e non misura la qualità del risultato.
 
 Cursor descrive ogni chat come una finestra che si riempie con file, conversazione e risultati dei tool. La vista del contesto può separare, tra gli altri elementi, prompt di sistema, tool, regole, skill, MCP, subagent, conversazione riassunta e conversazione originale ([Prompting agents](https://cursor.com/docs/agent/prompting)).
 
 ### Com'è composto il contesto
 
-Il contesto non è solo il testo dell'ultimo messaggio. A seconda del prodotto, della modalità e del task, può includere:
+Il contesto può includere molto più dell'ultimo messaggio. A seconda del prodotto, della modalità e del task, comprende per esempio:
 
 | Parte | Che cosa può contenere |
 |---|---|
@@ -77,9 +73,9 @@ Il contesto non è solo il testo dell'ultimo messaggio. A seconda del prodotto, 
 | Tool e integrazioni | Definizioni e schemi degli strumenti, server MCP e risultati delle chiamate. |
 | Lavoro dell'agente | Piani, output dei tool, log, errori e modifiche già proposte o applicate. |
 
-Non tutti gli elementi vengono inclusi allo stesso modo in ogni richiesta. In Cursor, la vista del contesto può mostrare categorie come prompt di sistema, tool, regole, skill, MCP, subagent e conversazione originale o riassunta ([Prompting agents](https://cursor.com/docs/agent/prompting)).
+Gli elementi presenti cambiano da una richiesta all'altra. In Cursor, la vista del contesto può mostrare prompt di sistema, tool, regole, skill, MCP, subagent e conversazione originale o riassunta ([Prompting agents](https://cursor.com/docs/agent/prompting)).
 
-Il prompt engineering riguarda soprattutto come formulare le istruzioni. Il **context engineering** riguarda invece la selezione e la manutenzione di tutto ciò che il modello riceve: istruzioni, cronologia, file, tool, stato del repository, log e decisioni precedenti.
+Il prompt engineering si occupa di come formulare le istruzioni. Il **context engineering** riguarda la scelta e l'aggiornamento di tutto ciò che il modello riceve: cronologia, file, tool, stato del repository, log e decisioni già prese.
 
 [Anthropic definisce il contesto come l'insieme dei token disponibili durante l'inferenza](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) e suggerisce di curare il più piccolo insieme di informazioni ad alto segnale che permetta di ottenere il risultato. Il principio è generale e vale anche quando si lavora in Cursor.
 
@@ -87,36 +83,36 @@ Il prompt engineering riguarda soprattutto come formulare le istruzioni. Il **co
 
 È utile separare due tipi di informazione, distinti anche nella guida di Cursor [Working with Context](https://docs.cursor.com/en/guides/working-with-context):
 
-- **Intenzione:** che cosa vuoi ottenere, quali vincoli devono essere rispettati e quale formato deve avere il risultato.
-- **Stato:** che cosa esiste ora, quali file sono coinvolti, quali errori si verificano, che cosa è già stato modificato e quali test sono falliti.
+- Intenzione: il risultato che vuoi ottenere, i vincoli da rispettare e il formato richiesto.
+- Stato: situazione attuale, file coinvolti, errori, modifiche già fatte e test falliti.
 
-Un buon prompt contiene entrambi. Dire soltanto "sistema questo bug" lascia all'agente troppo lavoro di ricostruzione; incollare tutto il repository senza spiegare l'obiettivo aggiunge volume ma non necessariamente chiarezza.
+Una richiesta utile descrive sia l'intenzione sia lo stato. "Sistema questo bug" lascia all'agente da ricostruire il problema; incollare il repository senza spiegare l'obiettivo aggiunge materiale senza chiarire che cosa fare.
 
-### Context degradation: il contesto lungo non è sempre contesto utile
+### Context degradation: quando il contesto perde efficacia
 
-Questo fenomeno è spesso chiamato *context rot* o *context degradation*. Non è un overflow: può presentarsi prima che la finestra sia piena. Nel report tecnico di Chroma, prove controllate su 18 modelli hanno mostrato prestazioni meno affidabili al crescere della lunghezza dell'input in diversi compiti, con un peggioramento ulteriore quando si aggiungono informazioni distraenti. Non tutti i 18 modelli compaiono in ogni esperimento. Il report isola variabili sperimentali: non dimostra che ogni conversazione lunga peggiori in modo lineare, né stabilisce una soglia universale per Cursor. La guida di Morph offre una lettura applicata agli agenti di coding, ma contiene anche risultati e proposte dei prodotti dell'azienda: i suoi numeri specifici non vanno generalizzati senza verificarne metodo e ambito.
+Questo fenomeno è chiamato *context rot* o *context degradation*. Può comparire anche quando la finestra non è piena. Nel report tecnico di Chroma, esperimenti controllati su 18 modelli hanno rilevato prestazioni meno affidabili in diversi task al crescere dell'input, con un ulteriore calo quando venivano aggiunte informazioni distraenti. Non tutti i modelli partecipavano a ogni esperimento. Il report non dimostra un peggioramento lineare per ogni conversazione lunga e non fissa una soglia valida per Cursor. La guida di Morph applica il tema agli agenti di coding, ma include anche risultati e proposte legati ai prodotti dell'azienda: prima di generalizzare i suoi numeri, controlla metodo e ambito.
 
-La conseguenza pratica è curare qualità e pertinenza, non solo capienza:
+Nella pratica, conta soprattutto mantenere il contesto pertinente:
 
-- restringi le ricerche e non riversare nel contesto ogni corrispondenza o file candidato;
-- conserva le evidenze utili, le decisioni e i vincoli; lascia fuori tentativi superati e piste scartate;
-- fai un checkpoint o una sintesi quando cambia fase, non solo quando la finestra è quasi piena;
-- dopo la sintesi, verifica che i fatti importanti e i riferimenti ai file siano ancora presenti;
-- considera delega o chat separata per esplorazioni indipendenti solo se il risultato torna come breve elenco di file e fatti verificabili: più agenti non significano automaticamente meno token o costo.
+- Limita la ricerca ai file e ai risultati pertinenti.
+- Conserva evidenze, decisioni e vincoli; togli tentativi superati e piste abbandonate.
+- Fai un checkpoint quando cambia la fase del lavoro, anche se la finestra è ancora lontana dal limite.
+- Dopo una sintesi, controlla che contenga i fatti e i riferimenti ai file necessari.
+- Delega o separa la chat per esplorazioni indipendenti solo se puoi riunire i risultati in un elenco breve e verificabile. Più agenti possono aumentare il costo.
 
 ![Infografica sulla selezione del contesto: file, errori, vincoli e tool pertinenti passano nel prompt focalizzato; log completi, tool inutili e tentativi superati restano fuori.](assets/context-signal-not-volume.png)
 
-*Figura. Ridurre il rumore è una buona pratica di context engineering, non una garanzia matematica di maggiore affidabilità.*
+*Figura. Ridurre il rumore aiuta a selezionare il contesto, ma non garantisce da solo un risultato più affidabile.*
 
-La compattazione può rendere il contesto più maneggevole, ma non annulla eventuali errori già introdotti né garantisce che la sintesi conservi ogni dettaglio. Per questo prevenire rumore e controllare i checkpoint resta utile anche con una finestra ampia.
+La compattazione rende il contesto più maneggevole, ma può perdere dettagli e non corregge gli errori già introdotti. Conviene quindi ridurre il rumore e controllare le sintesi anche quando la finestra è ampia.
 
-Per esempio, invece di "Perché non funziona?", indica il simbolo e il comportamento: "Perché `validateLoginForm` in `src/auth/login.ts` accetta una password composta solo da spazi quando viene chiamata dal form di registrazione?" Il riferimento preciso può ridurre ricerche e letture superflue; non è un risparmio automatico di token se il file o la spiegazione allegati diventano più ampi del necessario.
+Per esempio, al posto di "Perché non funziona?", indica il simbolo e il comportamento: "Perché `validateLoginForm` in `src/auth/login.ts` accetta una password composta solo da spazi quando viene chiamata dal form di registrazione?" Un riferimento preciso può evitare ricerche e letture inutili. Se però alleghi file o spiegazioni più ampi del necessario, il risparmio svanisce.
 
 ## 3. Ridurre il consumo nelle richieste
 
 ### Scrivere richieste che riducono esplorazione e output
 
-Una richiesta efficace non deve essere lunga: deve eliminare ambiguità.
+Una richiesta efficace chiarisce che cosa deve fare l'agente. Puoi usare questo schema e omettere i campi che non servono:
 
 ```text
 Obiettivo:
@@ -147,36 +143,36 @@ Formato della risposta:
 
 ### Prompt specificity: concretezza, non lunghezza
 
-Una rubrica pratica per la **Prompt Specificity** distingue tre livelli in base alla quantità di guida azionabile. Una richiesta vaga, senza riferimenti al codice, criteri di accettazione o vincoli, è a bassa specificità; se contiene uno di questi elementi è più guidata; se unisce riferimenti, criteri e vincoli rilevanti, o definisce chiaramente il risultato, è ad alta specificità.
+Una rubrica pratica divide la **Prompt Specificity** in tre livelli, a seconda di quanto la richiesta aiuta ad agire. È bassa se mancano riferimenti al codice, criteri di accettazione e vincoli. Sale quando la richiesta include uno di questi elementi; è alta quando combina i dettagli pertinenti o descrive chiaramente il risultato.
 
-Per aumentare la specificità senza gonfiare il prompt, includi solo gli elementi pertinenti:
+Per rendere la richiesta più precisa, aggiungi solo ciò che serve:
 
-- obiettivo e comportamento atteso;
-- file, funzione o componente coinvolto, se noto;
-- comportamento attuale o condizione che riproduce il problema;
-- vincoli e ciò che è fuori ambito;
-- criterio di accettazione o verifica.
+- Il risultato e il comportamento atteso.
+- Il file, la funzione o il componente, se li conosci.
+- Il comportamento attuale o i passaggi per riprodurre il problema.
+- Vincoli e modifiche fuori ambito.
+- Come verificare che il risultato sia corretto.
 
-Non serve compilare tutti i campi per ogni micro-task: "Rinomina `userID` in `userId` in questo file" è già concreto. Al contrario, un prompt lungo può restare poco specifico se contiene molto contesto senza dire quale risultato ottenere. Considera il punteggio come un segnale da confrontare con correttezza al primo tentativo, chiarimenti, tool call, retry e costo per risultato riuscito; non come un obiettivo da massimizzare aggiungendo dettagli irrilevanti.
+Per un micro-task basta anche "Rinomina `userID` in `userId` in questo file". Una richiesta lunga resta vaga se non dice che cosa ottenere. Usa il punteggio come indicazione e confrontalo con correttezza al primo tentativo, chiarimenti, chiamate ai tool, retry e costo per risultato. Aggiungere dettagli irrilevanti per alzarlo non aiuta.
 
 ![Schema di un flusso efficace: richiesta con obiettivo, file, vincoli e verifica; un agente attraversa una fase coerente; al checkpoint un handoff conciso può trasferire stato, decisioni, test e prossimo passo.](assets/specific-prompt-handoff.png)
 
-*Figura. Specificità utile e continuità del lavoro riducono ambiguità; se serve cambiare agente, un checkpoint rende esplicito lo stato da trasferire.*
+*Figura. Una richiesta precisa riduce le ambiguità. Se cambi agente, il checkpoint chiarisce che cosa trasferire.*
 
-### Ridurre l'output senza impoverire il lavoro
+### Ridurre l'output senza perdere informazioni utili
 
-- chiedi il diff e un riepilogo, non la ristampa di file già modificati;
-- specifica il formato della risposta;
-- chiedi spiegazioni estese solo quando servono per imparare o decidere;
-- chiedi di fermarsi dopo l'analisi quando vuoi prima approvare il piano;
-- dai un criterio di completamento, così l'agente non continua a esplorare senza limite;
-- chiedi di non ripetere il prompt o il piano a ogni turno;
-- per una modifica locale, preferisci un modello rapido e un contesto piccolo;
-- per un task multi-file incerto, può convenire un modello più capace se riduce retry e rework.
+- Chiedi il diff e un riepilogo, senza ristampare i file modificati.
+- Indica il formato della risposta.
+- Richiedi spiegazioni estese quando ti servono per imparare o prendere una decisione.
+- Se vuoi approvare il piano, chiedi all'agente di fermarsi dopo l'analisi.
+- Definisci quando il task è concluso, così l'esplorazione ha un limite.
+- Evita di far ripetere prompt e piano a ogni turno.
+- Per una modifica locale, prova un modello rapido con contesto mirato.
+- Per un task multi-file incerto, valuta un modello più capace se può ridurre retry e rework.
 
-Un prompt come "sii più breve" può ridurre il testo visibile, ma non elimina necessariamente tool call, input, reasoning o esplorazione. La leva principale resta il perimetro.
+"Sii più breve" può accorciare la risposta visibile, ma non riduce per forza input, reasoning, esplorazione o chiamate ai tool. Per contenere il consumo, definisci bene l'ambito.
 
-Per una correzione locale o un completamento breve, prova Cursor Tab o l'editing inline invece di avviare una sessione Agent multi-passaggio. Tab è una funzione distinta che suggerisce codice in base alle modifiche recenti, al contesto circostante e agli errori del linter ([documentazione Tab](https://prod.cursor.com/help/ai-features/tab)). Al 4 ottobre 2026, [Pro, Pro Plus e Ultra includono completamenti Tab illimitati](https://cursor.com/docs/models-and-pricing); il piano Hobby ha limiti. È quindi una buona alternativa per gli utenti a cui è inclusa, ma non un consiglio universale per ogni piano o metrica di utilizzo.
+Per una correzione locale o un completamento breve, prova Cursor Tab o l'editing inline prima di avviare una sessione Agent con più passaggi. Tab suggerisce codice in base alle modifiche recenti, al contesto circostante e agli errori del linter ([documentazione Tab](https://prod.cursor.com/help/ai-features/tab)). Al 4 ottobre 2026, [Pro, Pro Plus e Ultra includono completamenti Tab illimitati](https://cursor.com/docs/models-and-pricing); Hobby ha dei limiti. Verifica le condizioni del tuo piano prima di scegliere questa opzione.
 
 ### Skill di brevità: poche regole, ambito chiaro
 
@@ -189,83 +185,83 @@ Per i task di codice riporta modifica, verifica ed eventuali blocchi.
 Non alterare codice, citazioni o log da riportare fedelmente.
 ```
 
-Limita la skill ai contesti in cui serve: se è sempre attiva, le sue istruzioni entrano nel contesto anche per richieste che non beneficiano di uno stile telegrafico. In Cursor puoi circoscrivere una skill ai file pertinenti con `paths` oppure richiedere l'invocazione manuale con `disable-model-invocation: true`; mantieni brevi le istruzioni iniziali e carica dettagli di riferimento solo quando necessari. Evita regole come "non esprimere mai dubbi": possono rendere la risposta più corta, ma anche meno corretta o meno calibrata.
+Limita la skill ai contesti in cui serve. Se resta sempre attiva, le istruzioni entrano anche nelle richieste che non richiedono uno stile telegrafico. In Cursor puoi circoscriverla ai file pertinenti con `paths` oppure richiamarla manualmente con `disable-model-invocation: true`. Tieni brevi le istruzioni iniziali e carica i dettagli solo quando servono. Evita regole come "non esprimere mai dubbi": accorciano la risposta, ma possono renderla meno precisa.
 
-Una regola come "non eseguire comandi da terminale senza permesso" è una preferenza di sicurezza e controllo, non un trucco di risparmio; può essere giusta per il tuo flusso, ma le richieste di conferma possono aggiungere turni. Inseriscila nelle istruzioni persistenti solo se vuoi davvero questo comportamento in tutti i task.
+Una regola come "non eseguire comandi da terminale senza permesso" riguarda sicurezza e controllo. Può essere adatta al tuo flusso, ma le conferme aggiungono turni. Inseriscila nelle istruzioni persistenti se vuoi applicarla a tutti i task.
 
-Un benchmark indipendente di Kuba Guzik confronta un prompt "caveman" completo da 552 token con una versione breve da 85 token. Nei suoi test su due modelli Claude e due attività di sviluppo, la variante breve ha ridotto i token di output del 14% e 21%; quella completa del 13% e 9%. L'autore riporta risposte corrette in tutti i 72 tentativi, ma il campione è ristretto e non dimostra che quegli stessi risparmi si ripetano con altri modelli o task ([metodo e risultati](https://dev.to/jakguzik/i-benchmarked-the-viral-caveman-prompt-to-save-llm-tokens-then-my-6-line-version-beat-it-2o81)). Sono percentuali sull'output, non sul costo totale: per valutarle occorre includere anche i token della skill inviata, input, eventuali tool call, reasoning e retry. La lezione riutilizzabile è testare una versione breve contro una già concisa, mantenendo fissi task e criteri di qualità, e adottarla solo se migliora il costo per risultato corretto.
+Un benchmark indipendente di Kuba Guzik confronta un prompt "caveman" da 552 token con una versione breve da 85 token. Nei test, condotti su due modelli Claude e due attività di sviluppo, la versione breve ha ridotto i token di output del 14% e del 21%; quella completa del 13% e del 9%. L'autore riporta risposte corrette in tutti i 72 tentativi. Il campione è ristretto e non mostra se i risparmi si ripetano con altri modelli o task ([metodo e risultati](https://dev.to/jakguzik/i-benchmarked-the-viral-caveman-prompt-to-save-llm-tokens-then-my-6-line-version-beat-it-2o81)). Le percentuali riguardano l'output, non il costo totale: nel confronto includi token della skill, input, tool call, reasoning e retry. Per capire se una versione breve conviene, confrontala con quella già in uso sugli stessi task e criteri di qualità.
 
 ### Selezionare il contesto con precisione
 
-Quando sai dove intervenire, usa riferimenti mirati:
+Quando sai dove intervenire, scegli il riferimento più utile:
 
-- `@file` per un file specifico;
-- `@code` per una funzione, classe o simbolo;
-- `@folder` per una cartella quando la maggior parte del contenuto è pertinente;
-- `@Git` o il diff corrente per modifiche già esistenti;
-- `@Terminals` per un errore o un log concreto.
+- `@file` indica un file specifico.
+- `@code` indica una funzione, classe o simbolo.
+- `@folder` indica una cartella se gran parte dei suoi contenuti è pertinente.
+- `@Git` o il diff corrente mostrano modifiche già esistenti.
+- `@Terminals` porta nel contesto un errore o un log concreto.
 
 La documentazione di Cursor su [@Files & Folders](https://docs.cursor.com/context/%40-symbols/%40-files-and-folders) distingue il riferimento a una cartella dal caricamento del suo contenuto completo. Quest'ultima opzione può aumentare molto i token di input, soprattutto con una cartella grande o con una modalità di contesto esteso.
 
-Regole pratiche:
+Per restringere il contesto:
 
-- non allegare l'intero workspace se servono tre file;
-- non incollare una copia del file se puoi referenziarlo;
-- non includere log completi quando bastano le righe dell'errore e il contesto immediatamente precedente;
-- esegui prima il test più mirato e, se l'output è enorme, passa solo gli errori con le righe circostanti; quando filtri da terminale, conserva anche l'esito del comando originale;
-- escludi documentazione generata, build, vendor, cache e file binari non pertinenti;
-- usa `.cursorignore` o le impostazioni disponibili per ridurre il rumore, verificando però che non nascondano file necessari al task;
-- se non conosci ancora i file giusti, lascia che Agent esplori, ma dagli un obiettivo e un'area di ricerca.
+- Allega solo i file necessari, non l'intero workspace.
+- Fai riferimento al file invece di incollarne una copia.
+- Invia le righe dell'errore e il contesto vicino; evita i log completi se non servono.
+- Parti dal test più mirato. Se l'output è lungo, condividi gli errori con le righe circostanti e conserva l'esito del comando originale.
+- Escludi build, vendor, cache, documentazione generata e file binari non pertinenti.
+- Usa `.cursorignore` o le impostazioni disponibili, poi verifica che i file necessari restino accessibili.
+- Se non conosci ancora i file giusti, lascia esplorare Agent e indicagli obiettivo e area di ricerca.
 
 ### Ricerca del codice con grep in Cursor
 
-`grep` è uno strumento di ricerca testuale: trova stringhe o espressioni regolari nei file e mostra i percorsi e le righe corrispondenti, senza dover leggere a mano l'intero progetto. In Cursor Agent usa automaticamente **Instant Grep**, un motore di ricerca indicizzato locale, quando citi simboli precisi; supporta anche regex e confini di parola ([documentazione Cursor Search](https://cursor.com/docs/agent/tools/search)). Per esempio, una ricerca come `PaymentFailedError` trova i riferimenti esatti, mentre `import.*PaymentService` può aiutare a individuare import compatibili con un certo schema.
+La ricerca testuale trova stringhe o espressioni regolari e restituisce i file e le righe corrispondenti. Cursor Agent usa **Instant Grep**, un motore locale indicizzato, quando citi simboli precisi; supporta anche regex e confini di parola ([documentazione Cursor Search](https://cursor.com/docs/agent/tools/search)). Per esempio, `PaymentFailedError` trova le occorrenze esatte, mentre `import.*PaymentService` può individuare import che seguono uno schema.
 
-La ricerca in sé aiuta a restringere il campo, ma non azzera i token: quando Agent apre una corrispondenza, il contenuto del file può essere incluso nella richiesta al modello. Per questo è utile chiedere percorsi e righe pertinenti, poi approfondire solo i file necessari. Per esempio:
+La ricerca restringe il campo, ma non azzera i token. Quando Agent apre una corrispondenza, può inviare al modello il contenuto del file. Chiedi quindi percorsi e righe pertinenti, poi approfondisci solo i file necessari. Per esempio:
 
 ```text
 Cerca `PaymentFailedError` nel progetto. Riporta i percorsi e le righe rilevanti;
 apri solo i file necessari a capire dove viene generato e gestito l'errore.
 ```
 
-La documentazione specifica che l'indice di Instant Grep viene costruito e interrogato sulla macchina e che Cursor non carica codice o percorsi per creare l'indice; questo non significa che il contenuto di un file aperto dall'agente non possa essere inviato al modello. Per ricerche da terminale, `rg -n "PaymentFailedError" src/` è un esempio dell'equivalente con ripgrep.
+La documentazione specifica che Instant Grep costruisce e interroga l'indice sulla macchina, senza caricare codice o percorsi per creare l'indice. Se Agent apre un file, il contenuto può comunque essere inviato al modello. Da terminale, l'equivalente con ripgrep è `rg -n "PaymentFailedError" src/`.
 
 ### Regole, skill, MCP e tool
 
-Le istruzioni persistenti sono utili, ma ogni regola, skill, schema di tool o catalogo MCP può aggiungere contesto a più richieste. Una regola vale la pena quando evita ripetizioni, errori o rework più costoso dei token che introduce.
+Le istruzioni persistenti fanno risparmiare ripetizioni, ma regole, skill, schemi dei tool e cataloghi MCP possono aggiungere contesto a ogni richiesta. Tieni una regola se evita errori o rework che costerebbero più dei token che occupa.
 
-Mantieni quindi le regole:
+Scrivile in modo che siano:
 
-- brevi e non contraddittorie;
-- orientate a decisioni ripetibili;
-- specifiche per il progetto o per il team;
-- senza spiegazioni generiche che l'agente conosce già;
-- separate dalle istruzioni valide solo per una singola richiesta.
+- brevi e coerenti tra loro;
+- utili per decisioni che si ripetono;
+- specifiche per il progetto o il team;
+- prive di spiegazioni generiche già note all'agente;
+- distinte dalle indicazioni valide per un singolo task.
 
 Un catalogo MCP ampio può occupare contesto con descrizioni e schemi dei tool, anche prima che l'agente li invochi. Un utente Cursor ha riportato nel forum che, nella propria configurazione, prompt di sistema, definizioni dei tool, regole e skill occupavano circa 47.500 token di contesto iniziale senza file del repository: è un esempio personale, non un valore tipico garantito.
 
-Per limitare il rumore:
+Per ridurre il contesto non necessario:
 
-- disattiva i server MCP non pertinenti al progetto;
-- nella chat, disabilita i singoli tool che non servono; Cursor permette di attivarli o disattivarli dalla lista degli strumenti;
-- se gestisci un server MCP, rendi selezionabili i tool e mantieni brevi descrizioni e schemi;
-- abilita solo i tool necessari al task: riduce il contesto disponibile ai tool e limita chiamate accidentali;
-- riattiva i tool quando cambia il lavoro e ti servono davvero.
+- Disattiva i server MCP che non servono al progetto.
+- Nella chat puoi attivare o disattivare i singoli tool dalla lista degli strumenti.
+- Se gestisci un server MCP, rendi i tool selezionabili e mantieni brevi descrizioni e schemi.
+- Lascia attivi solo i tool utili al task. Così riduci il contesto e le chiamate accidentali.
+- Riattiva gli altri tool quando il lavoro li richiede.
 
-Anche le skill vanno caricate con uno scopo chiaro. Cursor dichiara che le skill possono caricare le risorse in modo progressivo. Puoi contenere il loro impatto così:
+Anche le skill dovrebbero entrare nel contesto solo quando servono. Cursor permette di caricare le risorse in modo progressivo. Per limitarne l'impatto:
 
-- tieni il file `SKILL.md` focalizzato e sposta le spiegazioni lunghe in `references/`, da aprire solo quando servono;
-- usa il campo `paths` per rendere disponibile una skill solo per i file a cui si applica;
-- imposta `disable-model-invocation: true` se vuoi che una skill entri nel contesto solo quando la invochi esplicitamente con `/nome-skill`;
-- evita di mantenere una Custom Mode o istruzione specialistica attiva dopo la fase per cui serve.
+- Tieni `SKILL.md` focalizzato e sposta le spiegazioni lunghe in `references/`, da consultare quando servono.
+- Usa `paths` per limitare la skill ai file a cui si applica.
+- Imposta `disable-model-invocation: true` se vuoi caricarla solo quando la richiami con `/nome-skill`.
+- Disattiva Custom Mode e istruzioni specialistiche quando la fase relativa è finita.
 
-#### Skillset JSON annidati: selezione sì, formato magico no
+#### Skillset JSON annidati: conta la selezione, non il formato
 
-In un [post del forum Cursor](https://forum.cursor.com/t/using-nested-json-skillsets-to-save-90-of-tokens-with-cursor/141399), un autore attribuisce al proprio sistema di skillset JSON annidati un risparmio dell'87% e miglioramenti di velocità e successo. È una testimonianza personale, non un benchmark indipendente: il post descrive anche un selettore MCP proprietario che recupera la conoscenza pertinente. Il beneficio plausibile è caricare solo la parte di conoscenza utile al task, non il fatto che i dati siano in JSON.
+In un [post del forum Cursor](https://forum.cursor.com/t/using-nested-json-skillsets-to-save-90-of-tokens-with-cursor/141399), un autore attribuisce al proprio sistema di skillset JSON annidati un risparmio dell'87% e miglioramenti di velocità e successo. È un'esperienza personale, non un benchmark indipendente. Il post descrive anche un selettore MCP proprietario che recupera le informazioni pertinenti: il possibile vantaggio viene dalla selezione, non dal formato JSON.
 
-JSON non è intrinsecamente più compatto del Markdown: chiavi ripetute, parentesi e stringhe possono aumentare i token, mentre campi strutturati sono utili per schemi, contratti API e dati che un tool deve interpretare. Inoltre, mettere file in sottocartelle non garantisce che Cursor li carichi selettivamente: serve un meccanismo esplicito di selezione o recupero. Cursor documenta skill native in `SKILL.md`, cartelle annidate per organizzarle, attivazione su richiesta e ambito tramite `paths`. Parti da queste funzioni; adotta un indice JSON o un MCP solo se risolve un problema concreto e misura il costo totale, comprese descrizioni dei tool, ricerche e contenuto recuperato.
+JSON può occupare più token di Markdown per via delle chiavi ripetute, delle parentesi e delle stringhe. I campi strutturati sono invece utili per schemi, contratti API e dati che un tool deve interpretare. Le sottocartelle, da sole, non fanno caricare i file in modo selettivo: serve un sistema che scelga o recuperi i contenuti. Cursor documenta skill native in `SKILL.md`, cartelle annidate, attivazione su richiesta e ambito tramite `paths`. Parti da queste funzioni. Aggiungi un indice JSON o un MCP se risolvono un problema concreto, poi misura anche il costo di descrizioni dei tool, ricerche e contenuti recuperati.
 
-La critica alla *context pollution* è discussa anche da [Sam McLeod](https://smcleod.net/2025/08/stop-polluting-context-let-users-disable-individual-mcp-tools/), che mostra quanto le descrizioni dei tool possano variare e sostiene il controllo granulare. I suoi conteggi sono esempi del suo ambiente, non una misura ufficiale di Cursor. Le funzioni di Cursor sopra descritte sono documentate nella guida [MCP integrations](https://prod.cursor.com/help/customization/mcp) e nella guida [Agent Skills](https://cursor.com/docs/skills).
+Nel suo articolo sulla *context pollution*, [Sam McLeod](https://smcleod.net/2025/08/stop-polluting-context-let-users-disable-individual-mcp-tools/) mostra quanto possano variare le descrizioni dei tool e sostiene il controllo granulare. I conteggi si riferiscono al suo ambiente, non sono misure ufficiali di Cursor. Le funzioni descritte qui sono documentate nelle guide Cursor [MCP integrations](https://prod.cursor.com/help/customization/mcp) e [Agent Skills](https://cursor.com/docs/skills).
 
 ## 4. Come si forma il consumo
 
@@ -275,7 +271,7 @@ La critica alla *context pollution* è discussa anche da [Sam McLeod](https://sm
 
 ### Come un agente fa crescere il consumo
 
-Una richiesta a un agente non è sempre un singolo prompt e una singola risposta. Un flusso tipico è:
+Una richiesta a un agente può richiedere più prompt e risposte. In genere il ciclo è questo:
 
 ```text
 obiettivo + istruzioni + contesto iniziale
@@ -290,88 +286,80 @@ obiettivo + istruzioni + contesto iniziale
                     ↺
 ```
 
-Il modello può quindi:
+Durante il ciclo, l'agente può:
 
-1. cercare file e simboli;
-2. leggere codice o documentazione;
-3. proporre o applicare una modifica;
-4. eseguire test o comandi;
-5. leggere errori e log;
-6. correggere la modifica;
-7. ripetere il ciclo fino alla verifica.
+1. cercare file o simboli e leggere il codice pertinente;
+2. proporre una modifica e applicarla;
+3. eseguire test o comandi e leggerne l'output;
+4. correggere gli errori e ripetere i passaggi necessari fino alla verifica.
 
-I passaggi non sono una categoria separata di token, ma ogni passaggio può generare nuovo input, output, tool call e materiale da mantenere nel contesto. Per questo un modello economico per token può risultare più costoso sul task completo se esplora troppo, produce retry o richiede molto rework manuale.
+I passaggi non hanno una categoria di token separata. Ognuno può aggiungere input, output, chiamate ai tool e materiale al contesto. Un modello economico per token può quindi costare di più sul task completo se richiede molte esplorazioni, retry o correzioni manuali.
 
-Anche gli agenti in background o in parallelo servono soprattutto ad aumentare il throughput, non sono una scorciatoia garantita per risparmiare. Ogni agente può avviare la propria esplorazione, usare contesto e tool e produrre verifiche separate. Conviene parallelizzare attività davvero indipendenti quando il tempo risparmiato vale il costo aggiuntivo; per una modifica minima o ambigua, un solo agente è spesso più efficiente.
+Gli agenti in background o in parallelo possono aumentare il throughput, ma ciascuno avvia la propria esplorazione e usa contesto e tool. Usali per attività indipendenti quando il tempo risparmiato giustifica il costo aggiuntivo. Per una modifica piccola o ambigua, spesso basta un agente.
 
 ## 5. Gestire conversazioni lunghe e passaggi di fase
 
-Cursor riassume o comprime automaticamente parti delle conversazioni quando la finestra si avvicina al limite; per file e cartelle usa strategie diverse di condensazione ([Summarization](https://docs.cursor.com/en/agent/chat/summarization)). La compressione evita di interrompere subito il lavoro, ma può perdere dettagli secondari o trasformare una decisione precisa in una sintesi troppo generica.
+Quando la finestra si avvicina al limite, Cursor riassume o comprime parti della conversazione. Per file e cartelle usa strategie diverse ([Summarization](https://docs.cursor.com/en/agent/chat/summarization)). La sintesi permette di continuare, ma può perdere dettagli o rendere generica una decisione precisa.
 
-Non esiste una percentuale universale, come "quando arrivo al 50% devo aprire una nuova chat". È più utile osservare i sintomi:
+Non c'è una soglia valida per tutti, come "al 50% apro una nuova chat". Osserva piuttosto se l'agente:
 
-- l'agente ripete ricerche già fatte;
-- dimentica vincoli o decisioni;
-- confonde file con nomi simili;
-- reintroduce una soluzione già scartata;
-- produce risposte più vaghe o più lunghe;
-- aumenta il numero di retry;
-- il contesto contiene ormai molti tentativi non più rilevanti.
+- ripete ricerche o confonde file con nomi simili;
+- perde di vista vincoli e decisioni;
+- ripropone soluzioni già scartate;
+- dà risposte più vaghe o più lunghe e richiede altri retry;
+- continua a portarsi dietro tentativi ormai superati.
 
-La ricerca [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) mostra che i modelli possono usare peggio le informazioni rilevanti quando sono immerse nel mezzo di contesti lunghi. Il risultato non significa che Cursor "dimentichi" automaticamente tutto, ma spiega perché più contesto non equivale sempre a più accuratezza.
+La ricerca [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) mostra che i modelli possono usare meno bene le informazioni collocate nel mezzo di contesti lunghi. Non descrive un comportamento specifico di Cursor, ma aiuta a capire perché aggiungere contesto non migliori sempre l'accuratezza.
 
 ### Quando conviene una nuova chat
 
 Apri una nuova chat quando:
 
-- inizi un task indipendente;
-- il problema è cambiato sostanzialmente;
-- la cronologia contiene molte strade abbandonate;
-- la sintesi automatica non conserva più i dettagli importanti;
-- vuoi confrontare due approcci senza contaminare il contesto.
+- inizi un task indipendente o il problema è cambiato;
+- la cronologia contiene molte piste abbandonate;
+- la sintesi non conserva più i dettagli necessari;
+- vuoi confrontare due approcci in contesti separati.
 
-Usa chat separate per task indipendenti: isoli obiettivi e decisioni e riduci la possibilità che una cronologia estranea interferisca. Ma "svuotare la chat" non è automaticamente il primo risparmio di denaro: il costo dipende dai token e dai passaggi, non dal numero di chat. Una nuova chat può dover ricevere di nuovo regole, strumenti, file e stato, e un handoff troppo dettagliato aggiunge altro input. Per continuare lo stesso task, resta nella chat se il contesto è ancora utile; riparti quando il rumore o i task estranei costano più della ricostruzione. Cursor comprime le conversazioni lunghe, quindi una chat nuova non è una garanzia di costo inferiore.
+Una chat separata tiene distinti obiettivi e decisioni. Il costo dipende però dai token e dai passaggi: una nuova chat può richiedere di reinviare regole, strumenti, file e stato, mentre un handoff lungo aggiunge altro input. Per proseguire lo stesso task, resta nella chat finché il contesto è utile. Riparti quando il rumore costa più della ricostruzione; la compressione automatica di Cursor rende comunque incerto il risparmio.
 
 ### Una chat per le fasi collegate della stessa feature
 
-Se analisi, chiarimenti, soluzione, specifica e implementazione dipendono l'una dall'altra, puoi mantenerle nello stesso thread. Procedi per fasi: chiedi prima di analizzare senza modificare codice; fai domande successive sui punti emersi e chiedi di aggiornare l'analisi; prepara la soluzione; ricava dalla soluzione approvata criteri di accettazione e test; implementa un ticket alla volta. Nei messaggi successivi aggiungi la domanda specifica senza ripetere premesse, vincoli e risultati già presenti nella conversazione.
+Se analisi, chiarimenti, soluzione e implementazione riguardano la stessa feature, puoi tenerli nello stesso thread. Chiedi prima un'analisi senza modifiche, poi chiarisci i punti emersi. Quando la soluzione è pronta, definisci criteri di accettazione e test, quindi implementa un ticket alla volta. Nei messaggi successivi aggiungi la domanda specifica senza ripetere informazioni già presenti.
 
 ### Mantenere continuità e fare handoff
 
-Questa è una delle best practice più importanti per contenere sia il costo sia il rework.
+La continuità riduce il rischio di rifare lavoro e aiuta a contenere i costi.
 
 #### Che cosa significa "cambiare agente"
 
-In Cursor si possono confondere tre cose diverse:
+In Cursor, "cambiare agente" può indicare:
 
-- **cambiare modello:** selezionare un altro modello dal model picker;
-- **cambiare modalità o agent:** passare, per esempio, da Ask a Agent o a una Custom Mode con tool e istruzioni differenti;
-- **cambiare chat:** iniziare una conversazione nuova, con una cronologia diversa.
+- cambiare modello dal model picker;
+- passare da Ask ad Agent o a una Custom Mode, con tool e istruzioni diversi;
+- aprire una nuova chat con una cronologia separata.
 
-Cursor consente di cambiare modello durante una conversazione e applica il cambio ai turni successivi ([Prompting agents](https://cursor.com/docs/agent/prompting)). Quindi non è corretto dire che il cambio sia tecnicamente impossibile o che cancelli sempre il contesto.
+Cursor consente di cambiare modello durante una conversazione e applica la scelta ai turni successivi ([Prompting agents](https://cursor.com/docs/agent/prompting)). Il cambio quindi non è impossibile e non cancella necessariamente il contesto.
 
-La raccomandazione pratica è però di **non cambiare agente o modello a ogni turno e di non farlo nel mezzo di una fase atomica**, per questi motivi:
+Evita di cambiare modello o agente a ogni turno o nel mezzo di una fase. Il passaggio può comportare alcuni costi:
 
-1. il nuovo modello deve interpretare la cronologia o il suo riassunto, non il ragionamento interno non mostrato dal modello precedente;
-2. può avere capacità, priorità, tool, regole o stile di esplorazione diversi;
-3. può decidere di rileggere file e rieseguire verifiche già svolte;
-4. può interpretare diversamente una decisione ancora non consolidata;
-5. eventuali cache, istruzioni e contesti disponibili possono non essere equivalenti;
-6. il lavoro duplicato può costare più del risparmio ottenuto scegliendo un modello più economico.
+1. Il nuovo modello deve ricostruire lo stato dalla cronologia o dalla sintesi; non vede il ragionamento interno del modello precedente.
+2. Può avere capacità, regole, tool o un metodo di esplorazione diversi e rileggere file o ripetere verifiche.
+3. Può interpretare diversamente decisioni provvisorie; anche contesto e cache disponibili possono cambiare.
+4. Il lavoro duplicato può costare più del risparmio ottenuto scegliendo un modello meno caro.
 
-Questi sono rischi operativi, non una legge assoluta: cambiare modello può essere utile quando il primo ha esplorato e il secondo deve fare un'implementazione complessa o una revisione indipendente. Il cambio va fatto a un **confine di fase**, dopo aver salvato lo stato.
+Sono rischi, non regole assolute. Per esempio, puoi usare un modello per esplorare e passare a uno più capace per un'implementazione complessa o una revisione indipendente. Fai il cambio a un **confine di fase**, dopo aver salvato lo stato.
 
 #### Strategia consigliata
 
-Mantieni lo stesso agente per una fase coerente:
+Per ogni fase, mantieni lo stesso agente e segui questo ordine:
 
-1. **esplorazione:** capire struttura, vincoli e causa;
-2. **piano:** fissare approccio e criteri di accettazione;
-3. **implementazione:** modificare i file;
-4. **verifica:** eseguire test e correggere gli errori;
-5. **review:** controllare diff e rischi residui.
+1. Esplora struttura, vincoli e causa.
+2. Definisci approccio e criteri di accettazione.
+3. Applica le modifiche.
+4. Esegui i test e correggi gli errori.
+5. Rivedi il diff e i rischi residui.
 
-Puoi cambiare modello tra una fase e l'altra, ma prima crea un checkpoint con stato, decisioni e prove. Se cambi modalità, verifica anche quali tool e istruzioni sono attivi.
+Puoi cambiare modello tra le fasi. Prima salva stato, decisioni e risultati delle verifiche; se cambi modalità, controlla anche tool e istruzioni attivi.
 
 #### Handoff minimo
 
@@ -389,11 +377,11 @@ Problemi aperti:
 Prossimo passo esatto:
 ```
 
-Poi indica esplicitamente al nuovo agente di leggere i file elencati, controllare il diff e verificare lo stato prima di modificare altro. Un handoff non deve diventare una copia della conversazione: se è lungo quanto la cronologia, il vantaggio si riduce.
+Chiedi al nuovo agente di leggere i file elencati e controllare diff e stato prima di intervenire. L'handoff deve restare più breve della cronologia e rimandare agli artefatti utili.
 
 #### Rendere l'handoff una skill riutilizzabile
 
-Il flusso si può codificare in una skill richiamata manualmente, così il prompt di handoff non occupa ogni richiesta. La skill documentata da Matt Pocock salva un file temporaneo per trasferire il lavoro e rimanda agli artefatti già esistenti invece di duplicarli. Il suo obiettivo è la **portabilità** del task, non una riduzione garantita dei token: se la sessione destinataria non può leggere il file temporaneo, bisogna trasferire il contenuto attraverso un canale accessibile. Il file temporaneo, inoltre, non sostituisce decisioni o documenti che devono restare nel repository.
+Puoi codificare il flusso in una skill richiamata manualmente, evitando di ripetere il prompt di handoff in ogni task. La skill di Matt Pocock salva un file temporaneo e rimanda agli artefatti esistenti. Serve a rendere il task **portabile**; non garantisce meno token. La sessione destinataria deve poter leggere il file o riceverne il contenuto tramite un canale accessibile. I documenti che devono restare nel repository vanno comunque salvati lì.
 
 Esempio essenziale adattato alle skill di Cursor:
 
@@ -425,90 +413,90 @@ Se l'utente indica lo scopo della prossima sessione, focalizza il documento su q
   poi comunica il percorso salvato.
 ```
 
-`disable-model-invocation: true` mantiene la skill fuori dai task non pertinenti finché non viene richiamata. La documentazione di Cursor elenca i campi `name`, `description`, `paths`, `disable-model-invocation`, `icon`, `color` e `metadata`; non elenca `argument-hint`, presente invece nel prompt d'esempio originale. Per una skill portabile, passa il focus della prossima sessione nel testo con cui la richiami e verifica i campi supportati dal tuo ambiente.
+Con `disable-model-invocation: true`, la skill entra nel contesto solo quando la richiami. Cursor documenta i campi `name`, `description`, `paths`, `disable-model-invocation`, `icon`, `color` e `metadata`, ma non `argument-hint`, presente nell'esempio originale. Per trasferire il focus del task, specificalo nel testo di richiamo e controlla quali campi supporta il tuo ambiente.
 
 #### Quando cambiare è sensato
 
-Il cambio può essere conveniente quando:
+Il cambio può servire quando:
 
-- un modello rapido ha completato la ricognizione e un modello più capace deve affrontare il design o il refactoring;
-- vuoi una review indipendente dopo aver creato un commit o un diff stabile;
-- il modello corrente è bloccato e una seconda strategia può rompere il loop;
-- vuoi separare implementazione e revisione per ridurre il rischio di confermare i propri errori.
+- un modello rapido ha concluso la ricognizione e serve un modello più capace per design o refactoring;
+- vuoi una review indipendente su un commit o diff stabile;
+- il modello corrente è bloccato e vuoi provare un'altra strategia;
+- vuoi separare implementazione e revisione.
 
-Non cambiare solo perché una risposta è lenta o perché il nuovo modello sembra più economico per token. Confronta il costo del task completo, compresi riletture, retry e interventi manuali.
+Una risposta lenta o una tariffa per token più bassa non bastano a giustificare il cambio. Confronta il costo dell'intero task, comprese riletture, retry e correzioni manuali.
 
 ## 6. Prompt caching e cache hit
 
 ### Come funziona il prompt caching
 
-Il **prompt caching** riutilizza il calcolo fatto dal modello su una parte iniziale e stabile del prompt. In genere il provider conserva stati interni di calcolo (*KV cache*); quando una richiesta successiva ripresenta lo stesso prefisso, può riutilizzarli. La chiamata al modello avviene comunque: il caching non restituisce semplicemente una risposta precedente.
+Il **prompt caching** riutilizza il calcolo che il modello ha già fatto su una parte iniziale e stabile del prompt. In genere il provider conserva gli stati interni (*KV cache*) e li riusa quando una richiesta successiva ripresenta lo stesso prefisso. Il modello elabora comunque la richiesta e genera una nuova risposta.
 
-Non va confuso con la **cache semantica** descritta in alcuni sistemi applicativi: quella cerca una domanda uguale o simile e può restituire una risposta già memorizzata, evitando del tutto una nuova chiamata al modello. Prompt caching e cache semantica agiscono a livelli diversi.
+La **cache semantica** funziona in modo diverso: cerca una domanda uguale o simile e può restituire una risposta già memorizzata, evitando una nuova chiamata al modello. Prompt caching e cache semantica operano quindi a livelli diversi.
 
-In pratica:
+Le metriche principali sono:
 
-- **cache write**: un prefisso idoneo viene registrato per poter essere riusato;
-- **cache read**: una richiesta successiva trova quel prefisso e lo riutilizza;
-- **input non cached**: la parte nuova o non corrispondente al prefisso viene elaborata normalmente.
+- **Cache write:** registra un prefisso idoneo per riutilizzarlo in seguito.
+- **Cache read:** una richiesta successiva trova e riusa quel prefisso.
+- **Input non cached:** la parte nuova o diversa dal prefisso viene elaborata normalmente.
 
-L'analogia più semplice viene dalle cache di memoria: un *hit* avviene quando il dato richiesto è già disponibile nella cache, un *miss* quando deve essere ricalcolato o recuperato dalla fonte originale ([introduzione generale ai cache hit](https://www.geeksforgeeks.org/computer-organization-architecture/cache-hits-in-memory-organization/)). Nel prompt caching l'idea è simile, ma non viene recuperata una risposta pronta: si riusa il calcolo del prefisso e il modello elabora comunque la parte nuova e genera una nuova risposta. Inoltre, per la cache del prompt conta la corrispondenza del prefisso secondo le regole del provider; due richieste semanticamente simili non bastano.
+Nelle cache di memoria, un *hit* indica che il dato richiesto è già disponibile; un *miss* significa che va recuperato o ricalcolato ([introduzione generale ai cache hit](https://www.geeksforgeeks.org/computer-organization-architecture/cache-hits-in-memory-organization/)). Nel prompt caching si riusa il calcolo del prefisso e il modello elabora i dati nuovi. Per ottenere un hit conta la corrispondenza del prefisso secondo le regole del provider: richieste solo simili nel significato non bastano.
 
 ![Schema del prompt caching: la prima richiesta scrive il prefisso stabile; una richiesta successiva riusa il prefisso compatibile, elabora i dati nuovi e genera una risposta nuova.](assets/prompt-caching-flow.png)
 
-*Figura. Il prompt caching riusa il calcolo del prefisso, non una risposta precedente.*
+*Figura. Il prompt caching riusa il calcolo del prefisso; il modello genera una nuova risposta.*
 
-Il prezzo del write e del read dipende dal provider, dal modello e, in alcuni casi, dal tempo di conservazione. Per esempio, nella tabella Cursor consultata il 4 ottobre 2026 GPT-5.6 Terra è indicato a $2 per milione di token input, $2,50 per milione di cache write e $0,20 per milione di cache read. Per Anthropic le tariffe di scrittura cambiano anche in base alla durata della cache. Sono esempi datati, non prezzi universali: controlla la pagina [Models & Pricing](https://cursor.com/docs/models-and-pricing) prima di fare confronti.
+Le tariffe di write e read dipendono dal provider e dal modello; in alcuni casi cambia anche il prezzo in base alla durata della cache. Nella tabella Cursor consultata il 4 ottobre 2026, GPT-5.6 Terra costa $2 per milione di token input, $2,50 per milione di cache write e $0,20 per milione di cache read. Le tariffe Anthropic per la scrittura cambiano con la durata. Sono valori datati: controlla [Models & Pricing](https://cursor.com/docs/models-and-pricing) prima di confrontarli.
 
 #### Perché i cache read possono superare la finestra di contesto
 
-Nel forum ufficiale di Cursor, una risposta spiega che il numero mostrato per una richiesta può aggregare più chiamate al modello fatte dall'agente durante quel turno. Se una richiesta parte con 20.000 token di contesto e l'agente effettua dieci chiamate, la prima può contabilizzare circa 20.000 token input e le nove successive circa 180.000 cache read, se riutilizzano lo stesso prefisso. Il totale del dashboard supera così 200.000 token anche se nessuna singola chiamata ha superato quella finestra.
+Una risposta nel forum ufficiale di Cursor spiega che il dato mostrato per una richiesta può sommare le chiamate al modello fatte dall'agente durante quel turno. Per esempio, con 20.000 token iniziali e dieci chiamate, la prima può contabilizzare circa 20.000 token input. Se le successive riusano il prefisso, possono aggiungere circa 180.000 cache read. Il dashboard mostra così oltre 200.000 token, anche se nessuna chiamata supera da sola quella finestra.
 
-Quindi `cache read` elevati non significano automaticamente né un prompt singolo enorme né uno spreco equivalente di token fatturati a prezzo pieno. Possono indicare che il contesto viene riutilizzato in molti passaggi e, se la tariffa è scontata, il costo marginale può essere relativamente basso. Resta però utile capire perché il task abbia richiesto tante chiamate e se i tool o il contesto iniziale siano più ampi del necessario.
+Un valore alto di `cache read` non indica per forza un singolo prompt enorme o token fatturati al prezzo pieno. Può riflettere il riuso del contesto in molti passaggi; con una tariffa scontata, il costo marginale può essere basso. Conviene comunque capire perché il task abbia richiesto tante chiamate e se tool o contesto iniziale siano troppo ampi.
 
-Per valutare un numero alto, guarda insieme:
+Per interpretare il dato, controlla:
 
-- costo monetario effettivo e modello instradato;
+- costo effettivo e modello usato;
 - quantità di cache write e cache read;
-- numero di chiamate, tool e passaggi dell'agente;
+- numero di chiamate, tool e passaggi;
 - dimensione e categorie del contesto iniziale;
-- risultato ottenuto, retry e tempo impiegato.
+- risultato, retry e tempo impiegato.
 
-Un esempio puramente illustrativo: con il prezzo sopra riportato, un prefisso da 100.000 token scritto una volta e riutilizzato nove volte costerebbe circa $0,25 di write e $0,18 per le nove letture, invece di $2,00 per dieci input non cached da 100.000 token ciascuno. L'esempio trascura output, nuovi token, limiti e condizioni del piano. Mostra perché un contatore alto di cache read non si traduce direttamente nello stesso importo di input ordinario.
+Con le tariffe riportate sopra, un prefisso di 100.000 token scritto una volta e letto nove volte costerebbe circa $0,25 per il write e $0,18 per i read. Dieci input non cached della stessa dimensione costerebbero $2,00. Il calcolo non include output, nuovi token, limiti o condizioni del piano. Per questo il totale dei cache read non equivale al costo dello stesso numero di token input ordinari.
 
 #### Quando la cache non si riutilizza
 
-Il riuso del prompt cache richiede in genere un prefisso identico fino al punto memorizzato, una dimensione minima e una richiesta entro il periodo di conservazione. Modifiche al modello, agli strumenti, alle istruzioni o al contenuto precedente possono ridurre la parte riutilizzabile; i dettagli cambiano tra provider e modelli.
+Il prompt caching richiede in genere un prefisso identico fino al punto memorizzato, una dimensione minima e una richiesta entro il periodo di conservazione. Cambiare modello, tool, istruzioni o contenuto precedente può ridurre la parte riutilizzabile. I requisiti dipendono dal provider e dal modello.
 
-Per chi costruisce un'integrazione via API, le guide ufficiali OpenAI e Anthropic raccomandano di mantenere stabile e all'inizio del prompt il contenuto riutilizzabile, lasciando i dati variabili dopo quel prefisso e misurando hit, miss e costi. In Cursor l'orchestrazione interna non è interamente controllabile dall'utente: sono principi utili per capire la cache, non una garanzia che una particolare modifica dell'utente cambi il cache hit rate.
+Per le integrazioni via API, le guide ufficiali OpenAI e Anthropic consigliano di tenere all'inizio del prompt il contenuto stabile e di aggiungere dopo i dati variabili. Raccomandano anche di misurare hit, miss e costi. In Cursor l'utente non controlla tutta l'orchestrazione: questi principi aiutano a capire la cache, ma non garantiscono che una modifica aumenti il cache hit rate.
 
-Per aumentare la probabilità di riuso, in un sistema che controlli direttamente:
+Se controlli direttamente il sistema, puoi aumentare le possibilità di riuso così:
 
-- metti istruzioni e riferimenti condivisi e stabili prima dei dati variabili;
-- aggiungi nuove informazioni in coda, invece di riscrivere la cronologia precedente;
-- mantieni stabile la configurazione di modello, strumenti e relativi schemi quando è possibile;
-- sposta in coda timestamp, stato aggiornato e altri dettagli che cambiano spesso;
-- misura i costi di write e read insieme al numero di riusi: scrivere in cache un prefisso usato una sola volta può non convenire.
+- Metti istruzioni e riferimenti condivisi prima dei dati variabili.
+- Aggiungi le nuove informazioni in fondo invece di riscrivere la cronologia.
+- Quando puoi, lascia invariati modello, tool e relativi schemi.
+- Sposta in fondo timestamp, stato aggiornato e altri dati che cambiano spesso.
+- Misura tariffe e numero di riusi: scrivere in cache un prefisso usato una sola volta può non convenire.
 
-Le soglie minime, la durata e il modo in cui vengono scelti i punti di cache variano per modello. Un hit non è garantito nemmeno se il prompt sembra identico: contano anche le regole di caching e l'instradamento del provider. Queste sono quindi indicazioni per comprendere il meccanismo, non impostazioni che l'utente possa applicare direttamente a tutta l'orchestrazione di Cursor. Per un inquadramento introduttivo si veda [Why Care About Prompt Caching in LLMs?](https://datacream.substack.com/p/why-care-about-prompt-caching-in), di Maria Mouschoutzi, PhD; per i dettagli tecnici fanno fede le guide dei provider.
+Le soglie minime, la durata e i punti di cache cambiano in base al modello. Anche un prompt apparentemente identico può non produrre un hit, per via delle regole di caching o del routing del provider. In Cursor queste indicazioni servono a capire il meccanismo, ma non sono impostazioni che controllano tutta l'orchestrazione. Per una panoramica introduttiva, leggi [Why Care About Prompt Caching in LLMs?](https://datacream.substack.com/p/why-care-about-prompt-caching-in) di Maria Mouschoutzi, PhD; per i dettagli tecnici consulta le guide dei provider.
 
-La discussione del [forum Cursor](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439) è utile per capire l'aggregazione dei contatori, ma resta una discussione community: non dimostra che ogni valore anomalo sia normale né esclude errori di visualizzazione o problemi specifici. Se i costi reali non tornano, conserva gli ID delle richieste e chiedi a Cursor di controllare il caso.
+La discussione sul [forum Cursor](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439) chiarisce come possono essere aggregati i contatori, ma non spiega ogni anomalia né esclude errori di visualizzazione. Se i costi non tornano, conserva gli ID delle richieste e chiedi a Cursor di verificare il caso.
 
 ### Favorire i cache hit in Cursor
 
-Come spiegato nella sezione 5, mantenere un thread per le fasi collegate di una feature e aggiungere domande incrementali può conservare un prefisso riutilizzabile. Il beneficio dipende però dal prefisso effettivamente inviato, dal provider, dal modello e dalla durata della cache. La cache è automatica: non esiste una frase che garantisca un hit.
+Come descritto nella sezione 5, puoi mantenere un thread per le fasi collegate di una feature e aggiungere domande man mano. Questo può conservare un prefisso riutilizzabile, a seconda di ciò che viene inviato, del provider, del modello e della durata della cache. Il caching è automatico e nessuna frase garantisce un hit.
 
-Tieni stabili modello, strumenti e ordine delle istruzioni quando puoi controllarli. I riferimenti @file e i percorsi aiutano a selezionare il contesto, ma il percorso non è una chiave magica: contano il contenuto e il prefisso effettivamente inviati. Se cambia un file, può cambiare la parte del prompt da quel punto in poi; non significa automaticamente che sia invalidata tutta la cache della conversazione.
+Quando puoi, mantieni stabili modello, tool e ordine delle istruzioni. I riferimenti @file e i percorsi selezionano il contesto, ma la cache dipende dal contenuto e dal prefisso inviati. Se cambia un file, può cambiare la parte del prompt successiva; non per questo si invalida automaticamente tutta la cache della conversazione.
 
-Apri una nuova chat per un task indipendente o quando la cronologia diventa rumorosa, non a ogni follow-up solo per inseguire gli hit. Separare analisi e scrittura può essere utile per controllare o approvare le modifiche, ma non è una tecnica affidabile per aumentare il cache hit rate. Le chiamate ripetute possono comunque accumulare cache read nel dashboard: la spiegazione dello [staff Cursor](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439) descrive come un singolo turno possa aggregare più chiamate al modello.
+Apri una nuova chat per un task indipendente o quando la cronologia diventa rumorosa. Non farlo a ogni follow-up per inseguire gli hit. Separare analisi e scrittura può aiutare a rivedere le modifiche, ma non aumenta in modo affidabile il cache hit rate. Le chiamate ripetute possono comunque sommarsi nel dashboard, come spiega lo [staff Cursor](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439).
 
 ### Leggere le metriche cache di Cursor
 
-Se confronti le colonne `Cache Read` e `Cache Write`, mantieni fermo il modello quando possibile e controlla quale modello ha gestito le richieste in Auto. Lo staff Cursor ha chiarito che quelle colonne mostrano la cache in stile Anthropic: un modello instradato verso un altro provider può usare meccanismi diversi, o non avere caching, senza comparire allo stesso modo nel dashboard. Perciò uno zero in quelle colonne non dimostra da solo l'assenza di ogni forma di riuso. Anche il routing e il modo in cui un modello riporta i token possono cambiare le categorie visualizzate; le discussioni del forum sono esempi legati a versioni e casi specifici, non garanzie valide per ogni configurazione ([chiarimento su Auto e cache](https://forum.cursor.com/t/auto-mode-prompt-caching-not-working/154654), [variazione delle categorie riportate](https://forum.cursor.com/t/sudden-change-in-token-cache-usage-after-subscription-renewal/173529)).
+Per confrontare `Cache Read` e `Cache Write`, fissa il modello e verifica quale abbia gestito le richieste in Auto. Lo staff Cursor ha spiegato che queste colonne mostrano la cache in stile Anthropic. Un modello instradato verso un altro provider può usare un meccanismo diverso o non avere caching, e quindi non comparire nello stesso modo. Uno zero nelle colonne non esclude altre forme di riuso. Routing e rendicontazione dei token possono cambiare le categorie mostrate; i thread del forum descrivono casi e versioni specifici ([chiarimento su Auto e cache](https://forum.cursor.com/t/auto-mode-prompt-caching-not-working/154654), [variazione delle categorie riportate](https://forum.cursor.com/t/sudden-change-in-token-cache-usage-after-subscription-renewal/173529)).
 
 ## 7. Modello, effort e Auto
 
-Scegli la configurazione in base al lavoro, non al nome del modello:
+Valuta modello e impostazioni rispetto al lavoro da svolgere:
 
 | Tipo di lavoro | Impostazione iniziale | Quando salire di livello |
 |---|---|---|
@@ -518,13 +506,13 @@ Scegli la configurazione in base al lavoro, non al nome del modello:
 | Task ripetibile | Modello ed effort fissi per rendere il confronto riproducibile. | Dopo aver misurato qualità e costo su più esempi. |
 | Esplorazione iniziale | Auto o modello economico. | Al checkpoint, se l'implementazione richiede ragionamento più profondo. |
 
-Cursor Router offre modalità Auto orientate a **Cost**, **Balance** e **Intelligence**; la disponibilità e il comportamento dipendono dalla versione e dal piano. Auto può cambiare modello tra richieste, quindi è comodo per iniziare ma meno adatto a confronti rigorosi tra configurazioni.
+Cursor Router offre modalità Auto orientate a **Cost**, **Balance** e **Intelligence**. Disponibilità e comportamento dipendono dalla versione e dal piano. Auto può cambiare modello tra richieste; è comodo per iniziare, ma rende meno rigorosi i confronti tra configurazioni.
 
-L'effort alto non è una scorciatoia universale: aumenta il lavoro solo quando serve. Per capire se conviene, confronta task equivalenti e misura il costo per risultato riuscito.
+Usa un effort alto quando il task richiede più ragionamento. Per capire se conviene, confronta task equivalenti e misura il costo per risultato riuscito.
 
-Non chiedere una finestra di contesto più ampia per abitudine: impostala quando il task richiede davvero file o specifiche che non entrano nella finestra predefinita. Il costo dipende dai token effettivamente usati e dalle condizioni del piano, non dal solo nome dell'opzione; più contesto può però introdurre materiale irrilevante e rendere meno evidente il segnale utile.
+Allarga la finestra di contesto quando il task richiede file o specifiche che non entrano in quella predefinita. Il costo dipende dai token usati e dal piano. Una finestra più ampia può includere materiale irrilevante e rendere meno visibile ciò che serve.
 
-Nota su **Max Mode**: secondo la documentazione aggiornata, è disponibile soltanto nei piani legacy con fatturazione a richieste, estende la finestra e viene addebitato al prezzo API del modello più il 20%. Nei piani basati sull'utilizzo, la dimensione del contesto si seleziona separatamente nel model picker. Quindi il consiglio corretto non è semplicemente "Max Mode sempre spento": controlla il tuo piano, parti dalla finestra predefinita e allargala solo se il lavoro lo richiede ([Max Mode on legacy plans](https://prod.cursor.com/help/ai-features/max-mode), [Models & Pricing](https://cursor.com/docs/models-and-pricing)).
+**Max Mode** è disponibile solo nei piani legacy con fatturazione a richieste, secondo la documentazione consultata. Estende la finestra e costa il prezzo API del modello più il 20%. Nei piani basati sull'utilizzo, la dimensione del contesto si sceglie dal model picker. Controlla il tuo piano, parti dalla finestra predefinita e allargala se il task lo richiede ([Max Mode on legacy plans](https://prod.cursor.com/help/ai-features/max-mode), [Models & Pricing](https://cursor.com/docs/models-and-pricing)).
 
 ## 8. Misurare il costo reale
 
@@ -538,13 +526,13 @@ Nota su **Max Mode**: secondo la documentazione aggiornata, è disponibile solta
 | **Output** | Testo della risposta, codice, diff, argomenti e contenuto generato per i tool. | Le tariffe possono essere molto diverse da quelle dell'input. |
 | **Reasoning** | Token usati internamente dai modelli che supportano il ragionamento, anche se non sono mostrati come testo della risposta. | Una risposta visibile breve può avere avuto un lavoro interno più lungo. La contabilizzazione dipende dal modello. |
 
-Le definizioni non sono categorie universali con la stessa tariffa presso tutti i provider. In particolare, non sommare automaticamente `cache write` al prezzo dell'input: la documentazione OpenAI specifica che per un dato token si applica la tariffa della categoria pertinente (input, cache read o cache write), non una sovrattassa aggiunta all'input. Controlla sempre la tabella del modello e del piano usati.
+Le categorie e le tariffe cambiano tra provider. Per OpenAI, ogni token viene conteggiato secondo la categoria a cui appartiene, come input, cache read o cache write. `Cache write` non è una sovrattassa da aggiungere al prezzo dell'input. Controlla la tabella del modello e del piano che usi.
 
-Le categorie e i nomi esatti variano tra prodotto, modello e piano. L'[SDK di Cursor](https://cursor.com/docs/sdk/typescript) e le pagine di utilizzo possono esporre metriche più dettagliate, ma il riferimento finale per la fatturazione resta la documentazione del piano in uso.
+Nomi e categorie possono variare tra prodotto, modello e piano. L'[SDK di Cursor](https://cursor.com/docs/sdk/typescript) e le pagine Usage possono mostrare più metriche; per la fatturazione, fai riferimento alla documentazione del tuo piano.
 
 ### Costo e limite tecnico
 
-Un task può costare molto senza raggiungere il limite della finestra, per esempio se l'agente fa molti passaggi. Al contrario, può raggiungere il limite senza essere particolarmente costoso se il modello ha tariffe basse o se parte dell'input è in cache.
+Un task può costare molto senza esaurire la finestra, per esempio se l'agente fa molti passaggi. Può anche raggiungere il limite con un costo contenuto, se il modello ha tariffe basse o parte dell'input è in cache.
 
 Il costo effettivo dipende almeno da:
 
@@ -555,13 +543,11 @@ su tutte le richieste del task,
 con le tariffe del modello e del piano in uso
 ```
 
-È una formula concettuale, non un calcolatore di fatturazione. Cursor può applicare pool e regole diverse per modelli first-party, modelli di terze parti, Auto e piani diversi. La pagina [Models & Pricing](https://cursor.com/docs/models-and-pricing) documenta anche il fatto che Auto fattura ogni richiesta in base al modello verso cui viene instradata e che le tariffe possono cambiare.
+La formula serve a ragionare sul costo, non a ricostruire la fattura. Cursor applica pool e regole diversi a seconda del piano, del modello e dell'eventuale routing Auto. La pagina [Models & Pricing](https://cursor.com/docs/models-and-pricing) spiega che Auto addebita ogni richiesta in base al modello scelto e che le tariffe possono cambiare.
 
 ### Misurare il costo reale
 
-Per ogni gruppo di task annota almeno:
-
-Consulta il pannello Usage nell'editor o il dashboard Cursor per il consumo e la ripartizione disponibili sul tuo piano ([Models & Pricing](https://cursor.com/docs/models-and-pricing)); le voci e il percorso esatto dell'interfaccia possono cambiare. Per il calcolo, usa il costo effettivo e non soltanto il numero di messaggi.
+Per confrontare gruppi di task, consulta Usage nell'editor o il dashboard Cursor. Le metriche disponibili e il percorso dell'interfaccia dipendono dal piano e possono cambiare ([Models & Pricing](https://cursor.com/docs/models-and-pricing)). Considera il costo effettivo insieme ai dati qui sotto, non il solo numero di messaggi.
 
 | Metrica | Domanda a cui risponde |
 |---|---|
@@ -584,25 +570,25 @@ costo totale di tutte le richieste e retry
 ÷ numero di risultati corretti e verificati
 ```
 
-Confronta sempre task simili, stessa definizione di successo e stesso livello di verifica. Non dedurre l'efficienza dalla lunghezza visibile della risposta: tool, file, struttura dei messaggi, cache e reasoning possono influenzare il conteggio. In particolare, il totale `cache read` nel dashboard può essere la somma di molte letture effettuate nei passaggi interni di una singola richiesta.
+Confronta task simili con gli stessi criteri di successo e verifica. La lunghezza della risposta visibile non basta a stimare l'efficienza: contano anche file, struttura dei messaggi, cache, reasoning e chiamate ai tool. Il totale `cache read` nel dashboard può sommare le letture di più passaggi interni.
 
 ## 9. Leggere i benchmark senza farsi ingannare
 
-I benchmark sono utili per formulare ipotesi, ma non predicono da soli il costo nel tuo repository. Leggi insieme:
+Usa i benchmark per formulare ipotesi. Per capire se valgono nel tuo repository, confronta:
 
-1. qualità o pass rate;
-2. costo medio per task;
-3. token e passaggi;
-4. tempo e affidabilità;
-5. tipo di task e metodo di valutazione.
+1. Qualità o pass rate.
+2. Costo medio per task.
+3. Token e numero di passaggi.
+4. Tempo e affidabilità.
+5. Tipo di task e metodo di valutazione.
 
-[CursorBench](https://cursor.com/cursorbench) è il riferimento più vicino al prodotto e riporta score, costo, token e passaggi. [DeepSWE](https://deepswe.datacurve.ai/) è un benchmark indipendente per task di software engineering a lungo raggio. I loro numeri non sono intercambiabili: dataset, harness e criteri possono essere diversi.
+[CursorBench](https://cursor.com/cursorbench) è il benchmark più vicino al prodotto e riporta score, costi, token e passaggi. [DeepSWE](https://deepswe.datacurve.ai/) misura task di software engineering a lungo raggio. I risultati non sono direttamente confrontabili perché dataset, harness e criteri possono differire.
 
 ### Frontiera tra costo e risultato
 
 ![Grafico benchmark con score percentuale sull'asse verticale e costo medio per task sull'asse orizzontale, con una configurazione evidenziata in verde.](assets/benchmark-frontiera-costo-score.png)
 
-*Figura 1. Una configurazione sulla frontiera può offrire un buon compromesso tra score e costo, ma va letta insieme a token, passaggi e variabilità.*
+*Figura 1. La frontiera mostra il compromesso tra score e costo; valuta anche token, passaggi e variabilità.*
 
 ### Costo e qualità non crescono sempre insieme
 
@@ -612,92 +598,89 @@ I benchmark sono utili per formulare ipotesi, ma non predicono da soli il costo 
 
 ![Grafico benchmark che mostra la relazione tra score, costo medio per task e livelli diversi di effort.](assets/benchmark-effort-costo.png)
 
-*Figura 3. L'effort va scelto in base al rapporto tra qualità e costo totale, non impostato sempre al massimo.*
+*Figura 3. Scegli l'effort in base alla qualità e al costo totale.*
 
-I grafici sono esempi di lettura dei dati presenti nel repository, non una tabella prezzi. Modelli, prezzi, pool e modalità di Cursor possono cambiare.
+I grafici mostrano come leggere i dati presenti nel repository. Non sono una tabella prezzi: modelli, tariffe, pool e modalità di Cursor possono cambiare.
 
 ## 10. Procedura consigliata
 
-1. Definisci obiettivo, ambito, vincoli, criteri di accettazione e verifica.
-2. Scegli un agente o modello adeguato alla fase e mantienilo stabile fino al checkpoint.
-3. Fornisci contesto mirato con `@file`, `@code`, `@folder`, diff o terminale.
-4. Usa Tab o editing inline per interventi locali; Agent per attività che richiedono esplorazione, tool o più passaggi.
-5. Chiedi prima un piano quando il task è ambiguo o rischioso.
-6. Lascia che l'agente esplori solo l'area necessaria e limita i file fuori ambito.
-7. Esegui test o controlli concreti: una risposta plausibile non è una verifica.
-8. Se il contesto diventa rumoroso, riassumi i punti decisivi o apri una chat nuova con handoff; per task indipendenti usa una chat separata.
-9. Cambia modello o agente solo a un confine di fase, dichiarando che cosa deve ricontrollare.
-10. Controlla quali server e tool MCP, regole e skill sono attivi; disattiva o restringi quelli irrilevanti.
-11. Seleziona la finestra di contesto adatta al piano e al task; non attivare opzioni estese per abitudine.
-12. Misura token, cache read/write, passaggi, retry, tempo, rework e costo per risultato.
-13. Aggiorna regole e documentazione solo con conoscenza riutilizzabile, non con il recap di una singola chat.
+1. Definisci obiettivo, ambito, vincoli e criteri di accettazione. Decidi anche come verificare il risultato.
+2. Scegli modello e agente per la fase, poi mantienili fino al checkpoint.
+3. Fornisci solo il contesto utile: riferimenti `@file`, `@code`, `@folder`, diff o terminale.
+4. Per modifiche locali usa Tab o editing inline; scegli Agent quando servono esplorazione, tool o più passaggi. Chiedi prima un piano se il task è ambiguo o rischioso.
+5. Limita l'esplorazione all'area necessaria. Controlla regole, skill, MCP e tool attivi e disattiva quelli che non servono.
+6. Verifica il risultato con test o controlli concreti: una risposta plausibile non basta.
+7. Se il contesto diventa rumoroso, riassumi le decisioni o crea un handoff. Usa una chat separata per un task indipendente; cambia agente o modello a un confine di fase e indica che cosa va ricontrollato.
+8. Scegli la finestra adatta al piano e al task. Attiva opzioni estese quando il lavoro richiede davvero più contesto.
+9. Misura token, cache read/write, passaggi, retry, tempo, rework e costo per risultato.
+10. Aggiorna regole e documentazione con informazioni riutilizzabili, non con il riepilogo di una singola chat.
 
 ## Checklist rapida
 
 Prima di inviare:
 
-- [ ] Ho indicato il risultato, non solo l'attività generica?
-- [ ] Ho delimitato file, cartelle e ciò che è fuori ambito?
-- [ ] Ho incluso l'errore o lo stato reale del sistema?
-- [ ] Ho definito come verificare il risultato?
-- [ ] La richiesta è abbastanza specifica da poter agire: obiettivo, riferimento utile e criterio di successo, senza contesto superfluo?
-- [ ] Sto allegando solo contesto pertinente?
+- [ ] Ho descritto il risultato che mi serve?
+- [ ] Ho indicato i file coinvolti e ciò che è fuori ambito?
+- [ ] Ho fornito l'errore o lo stato attuale del sistema?
+- [ ] Ho spiegato come verificare il risultato?
+- [ ] Ho dato riferimenti e criteri sufficienti per agire?
+- [ ] Ho allegato solo il contesto pertinente?
 
 Durante il lavoro:
 
-- [ ] L'agente sta ancora lavorando sul task originale?
+- [ ] L'agente segue ancora l'obiettivo iniziale?
 - [ ] Sta ripetendo ricerche o tentativi già fatti?
-- [ ] Il numero di tool call e retry sta crescendo senza progresso?
-- [ ] I tool MCP e le skill attivi servono davvero a questo task?
-- [ ] Sto cercando prima simboli o errori specifici e aprendo solo i file necessari?
-- [ ] Ho distinto il volume dei `cache read` dal loro costo effettivo e dal totale di una singola finestra?
-- [ ] Il modello o la modalità sono cambiati? Se sì, esiste un handoff?
-- [ ] Le regole e gli strumenti attivi aggiungono valore proporzionato al contesto che occupano?
+- [ ] Tool call e retry aumentano senza far avanzare il lavoro?
+- [ ] MCP, skill e regole attivi servono al task?
+- [ ] Cerco prima simboli ed errori specifici e apro solo i file necessari?
+- [ ] Distinguo il volume dei `cache read` dal costo e dalle dimensioni di una singola finestra?
+- [ ] Se è cambiato modello o modalità, ho preparato un handoff?
+- [ ] Tool e istruzioni giustificano il contesto che occupano?
 
 Alla fine:
 
-- [ ] I test o i controlli sono stati eseguiti?
-- [ ] Il diff è limitato all'ambito richiesto?
-- [ ] Il costo totale include retry e passaggi intermedi?
-- [ ] Ho salvato decisioni e stato se il lavoro continuerà in un'altra chat?
+- [ ] Ho eseguito i test o i controlli previsti?
+- [ ] Il diff resta nell'ambito richiesto?
+- [ ] Ho incluso retry e passaggi intermedi nel costo totale?
+- [ ] Se il lavoro continua in un'altra chat, ho salvato decisioni e stato?
 
 ## Fonti e risorse
 
-Fonti consultate dal 4 al 7 ottobre 2026. Interfacce, modelli, prezzi, modalità e limiti di Cursor sono soggetti a cambiamento: verificare sempre la documentazione aggiornata.
+Fonti consultate dal 4 al 7 ottobre 2026. Interfacce, modelli, prezzi, modalità e limiti di Cursor possono cambiare; verifica la documentazione aggiornata.
 
-- [Cursor Models & Pricing](https://cursor.com/docs/models-and-pricing) - modelli, pool di utilizzo, Auto e tariffe.
-- [Cursor Prompting agents](https://cursor.com/docs/agent/prompting) - categorie del contesto, @ mentions, modalità e cambio modello durante la chat.
-- [Cursor @Files & Folders](https://docs.cursor.com/context/%40-symbols/%40-files-and-folders) - riferimenti mirati e contenuto completo delle cartelle.
-- [Cursor Summarization](https://docs.cursor.com/en/agent/chat/summarization) - sintesi delle conversazioni e condensazione di file e cartelle.
-- [Cursor Working with Context](https://docs.cursor.com/en/guides/working-with-context) - contesto di intenzione, contesto di stato e ricerca mirata.
-- [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript) - metriche di utilizzo disponibili nell'SDK.
-- [OpenAI - Understanding and counting tokens](https://help.openai.com/en/articles/4936856-understanding-and-counting-tokens) - token, input, output, cache, reasoning e limiti di contesto.
-- [Paul Simmering - Every Trick to Save Token Costs](https://simmering.dev/blog/save-token-costs/) - strategie con risparmi e compromessi dichiarati dall'autore; le stime di costo e lingua dipendono dai modelli e dagli esempi considerati, non sono una previsione diretta per Cursor.
-- [PromptCost.org - LLM Tokenization Explained](https://promptcost.org/en/blog/llm-tokenization-explained/) - panoramica e stime illustrative sul rapporto fra lingue e token; non usare le percentuali riportate come benchmark universale o specifico per Cursor.
-- [Chroma - Context Rot: How Increasing Input Tokens Impacts LLM Performance](https://www.trychroma.com/research/context-rot) - report tecnico del 2025 con esperimenti controllati su 18 modelli; il report descrive limiti dei task studiati.
-- [Morph - Context Rot](https://www.morphllm.com/context-rot) - sintesi applicata ai coding agent, da leggere distinguendo la ricerca citata dalle affermazioni e dai risultati legati ai prodotti dell'autore.
-- [Matt Pocock - Handoff skill](https://github.com/mattpocock/skills/blob/main/skills/productivity/handoff/SKILL.md) - esempio di skill esplicita che crea un handoff temporaneo e rimanda agli artefatti già esistenti.
-- [DeepWiki - Handoff](https://deepwiki.com/mattpocock/skills/7.1-handoff) - panoramica del flusso e dei casi d'uso dell'handoff.
-- [OpenAI - Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) - riuso del prefisso, condizioni di cache hit, tariffe e diagnostica.
-- [Anthropic - Prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) - cache read/write, durata, tariffe e prefissi stabili.
-- [Anthropic - Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) - selezione del contesto, compaction e gestione dei task a lungo raggio.
-- [Cursor Forum - Why does Cursor consume an absurd amount of cache read tokens?](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439) - thread community con una spiegazione dell'aggregazione delle chiamate per richiesta.
-- [Cursor Forum - Auto mode: Prompt caching not working](https://forum.cursor.com/t/auto-mode-prompt-caching-not-working/154654) - risposta dello staff sul routing di Auto e sulle colonne Cache Read/Write; il comportamento dipende dal modello e dalla versione.
-- [Cursor Forum - Sudden change in token/cache usage after subscription renewal](https://forum.cursor.com/t/sudden-change-in-token-cache-usage-after-subscription-renewal/173529) - caso specifico in cui lo staff collega una variazione delle categorie visualizzate al modello instradato da Auto.
-- [Cursor Forum - Cursor high token usage](https://forum.cursor.com/t/cursor-high-token-usage/156924) - risposta dello staff sul contesto reinviato nelle chiamate e nei passaggi di Agent; le esperienze degli utenti nel thread non sono benchmark generali.
-- [Cursor MCP integrations](https://prod.cursor.com/help/customization/mcp) - attivare o disattivare server e singoli tool MCP.
-- [Cursor Agent Skills](https://cursor.com/docs/skills) - caricamento progressivo, attivazione esplicita e ambito delle skill.
-- [Cursor Tab completion](https://prod.cursor.com/help/ai-features/tab) - comportamento dei suggerimenti inline e impostazioni di Tab.
-- [Cursor Max Mode on legacy plans](https://prod.cursor.com/help/ai-features/max-mode) - disponibilità, fatturazione e uso di Max Mode nei piani legacy.
-- [Cursor - Saving Tokens in Cursor](https://note.com/travelnatsu/n/ne7d9c9306313?hl=en) - raccomandazioni personali su ambito, regole, Max Mode e log; la pagina avverte che la versione inglese è tradotta automaticamente.
-- [Cursor Forum - Using nested JSON Skillsets to save 90% of tokens](https://forum.cursor.com/t/using-nested-json-skillsets-to-save-90-of-tokens-with-cursor/141399) - proposta della community; il risparmio dichiarato dipende da un sistema e da strumenti personalizzati e non è un risultato generalizzabile del formato JSON.
-- [Sam McLeod - Stop Polluting Context](https://smcleod.net/2025/08/stop-polluting-context-let-users-disable-individual-mcp-tools/) - prospettiva di un autore indipendente sui costi di contesto delle definizioni MCP.
-- [MyEngineeringPath - LLM Caching](https://myengineeringpath.dev/genai-engineer/llm-caching/) - panoramica secondaria che distingue prompt cache, KV cache e cache semantica.
-- [GeeksforGeeks - Cache Hits in Memory Organization](https://www.geeksforgeeks.org/computer-organization-architecture/cache-hits-in-memory-organization/) - spiegazione generale di hit e miss in una cache di memoria; utile come analogia, non come descrizione tecnica del prompt caching.
-- [Kuba Guzik - I Benchmarked the Viral “Caveman” Prompt](https://dev.to/jakguzik/i-benchmarked-the-viral-caveman-prompt-to-save-llm-tokens-then-my-6-line-version-beat-it-2o81) - benchmark personale del prompt esteso e della versione compatta; risultati da leggere con i limiti del campione e del tipo di task.
-- [Cursor Search / Instant Grep](https://cursor.com/docs/agent/tools/search) - ricerca di simboli e pattern, indicizzazione locale e uso dell'Explore subagent per limitare il contesto principale.
-- [Towards Data Science - Why Care About Prompt Caching in LLMs?](https://towardsdatascience.com/why-care-about-promp-caching-in-llms/) - link fornito come lettura, non consultabile durante questa verifica; per la panoramica introduttiva si può usare la [versione accessibile di Maria Mouschoutzi, PhD](https://datacream.substack.com/p/why-care-about-prompt-caching-in). Per prezzi e requisiti tecnici fanno fede le documentazioni dei provider.
-- [Dre Dyson - articolo su cache read e Cursor](https://dredyson.com/how-i-solved-the-why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens-problem-step-by-step-guide-a-complete-beginners-fix-for-reducing-millions-of-unnecessary-cache-tokens-in-cu/) - link indicato come lettura community; non è stato possibile verificare il contenuto della pagina, quindi non viene usato come fonte per numeri o affermazioni tecniche.
-- [Liu et al., Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) - ricerca pubblicata su *Transactions of the Association for Computational Linguistics* sull'uso di contesti lunghi.
-- [CursorBench](https://cursor.com/cursorbench) - benchmark del prodotto con score, costo, token e passaggi.
-- [DeepSWE](https://deepswe.datacurve.ai/) - benchmark indipendente per task di software engineering a lungo raggio.
+- [Cursor Models & Pricing](https://cursor.com/docs/models-and-pricing): modelli, pool di utilizzo, Auto e tariffe.
+- [Cursor Prompting agents](https://cursor.com/docs/agent/prompting): categorie del contesto, @ mentions, modalità e cambio modello durante la chat.
+- [Cursor @Files & Folders](https://docs.cursor.com/context/%40-symbols/%40-files-and-folders): riferimenti mirati e contenuto delle cartelle.
+- [Cursor Summarization](https://docs.cursor.com/en/agent/chat/summarization): sintesi delle conversazioni e condensazione di file e cartelle.
+- [Cursor Working with Context](https://docs.cursor.com/en/guides/working-with-context): contesto di intenzione e di stato, oltre alla ricerca mirata.
+- [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript): metriche di utilizzo disponibili nell'SDK.
+- [OpenAI - Understanding and counting tokens](https://help.openai.com/en/articles/4936856-understanding-and-counting-tokens): token, input, output, cache, reasoning e limiti di contesto.
+- [Paul Simmering - Every Trick to Save Token Costs](https://simmering.dev/blog/save-token-costs/): strategie e compromessi descritti dall'autore. Le stime dipendono da modelli ed esempi e non prevedono direttamente l'uso di Cursor.
+- [PromptCost.org - LLM Tokenization Explained](https://promptcost.org/en/blog/llm-tokenization-explained/): panoramica e stime illustrative sul rapporto fra lingue e token. Le percentuali non sono benchmark universali o specifici per Cursor.
+- [Chroma - Context Rot: How Increasing Input Tokens Impacts LLM Performance](https://www.trychroma.com/research/context-rot): report tecnico del 2025 con esperimenti controllati su 18 modelli; i risultati riguardano i task studiati.
+- [Morph - Context Rot](https://www.morphllm.com/context-rot): sintesi applicata ai coding agent, da leggere distinguendo la ricerca dalle affermazioni e dai risultati sui prodotti dell'autore.
+- [Matt Pocock - Handoff skill](https://github.com/mattpocock/skills/blob/main/skills/productivity/handoff/SKILL.md): esempio di skill che crea un handoff temporaneo e rimanda agli artefatti esistenti.
+- [DeepWiki - Handoff](https://deepwiki.com/mattpocock/skills/7.1-handoff): panoramica del flusso e dei suoi casi d'uso.
+- [OpenAI - Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching): riuso del prefisso, condizioni di cache hit, tariffe e diagnostica.
+- [Anthropic - Prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching): cache read/write, durata, tariffe e prefissi stabili.
+- [Anthropic - Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents): selezione del contesto, compaction e gestione dei task a lungo raggio.
+- [Cursor Forum - Why does Cursor consume an absurd amount of cache read tokens?](https://forum.cursor.com/t/why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens/151439): thread community sull'aggregazione delle chiamate per richiesta.
+- [Cursor Forum - Auto mode: Prompt caching not working](https://forum.cursor.com/t/auto-mode-prompt-caching-not-working/154654): risposta dello staff sul routing Auto e sulle colonne Cache Read/Write. Il comportamento dipende da modello e versione.
+- [Cursor Forum - Sudden change in token/cache usage after subscription renewal](https://forum.cursor.com/t/sudden-change-in-token-cache-usage-after-subscription-renewal/173529): caso in cui lo staff collega una variazione delle categorie al modello instradato da Auto.
+- [Cursor Forum - Cursor high token usage](https://forum.cursor.com/t/cursor-high-token-usage/156924): risposta dello staff sul contesto reinviato tra chiamate e passaggi Agent; le esperienze degli utenti non sono benchmark generali.
+- [Cursor MCP integrations](https://prod.cursor.com/help/customization/mcp): attivazione e disattivazione di server e singoli tool MCP.
+- [Cursor Agent Skills](https://cursor.com/docs/skills): caricamento progressivo, attivazione esplicita e ambito delle skill.
+- [Cursor Tab completion](https://prod.cursor.com/help/ai-features/tab): comportamento e impostazioni dei suggerimenti inline.
+- [Cursor Max Mode on legacy plans](https://prod.cursor.com/help/ai-features/max-mode): disponibilità e fatturazione di Max Mode nei piani legacy.
+- [Cursor - Saving Tokens in Cursor](https://note.com/travelnatsu/n/ne7d9c9306313?hl=en): raccomandazioni personali su ambito, regole, Max Mode e log. La pagina segnala che la versione inglese è tradotta automaticamente.
+- [Cursor Forum - Using nested JSON Skillsets to save 90% of tokens](https://forum.cursor.com/t/using-nested-json-skillsets-to-save-90-of-tokens-with-cursor/141399): proposta community. Il risparmio dipende da un sistema e strumenti personalizzati, non è un risultato generalizzabile del formato JSON.
+- [Sam McLeod - Stop Polluting Context](https://smcleod.net/2025/08/stop-polluting-context-let-users-disable-individual-mcp-tools/): prospettiva indipendente sui costi di contesto delle definizioni MCP.
+- [MyEngineeringPath - LLM Caching](https://myengineeringpath.dev/genai-engineer/llm-caching/): panoramica secondaria su prompt cache, KV cache e cache semantica.
+- [GeeksforGeeks - Cache Hits in Memory Organization](https://www.geeksforgeeks.org/computer-organization-architecture/cache-hits-in-memory-organization/): spiegazione generale degli hit e miss in una cache di memoria, usata qui come analogia.
+- [Kuba Guzik - I Benchmarked the Viral “Caveman” Prompt](https://dev.to/jakguzik/i-benchmarked-the-viral-caveman-prompt-to-save-llm-tokens-then-my-6-line-version-beat-it-2o81): benchmark personale di prompt estesi e compatti, da leggere considerando campione e tipo di task.
+- [Cursor Search / Instant Grep](https://cursor.com/docs/agent/tools/search): ricerca di simboli e pattern, indicizzazione locale e uso dell'Explore subagent per limitare il contesto principale.
+- [Towards Data Science - Why Care About Prompt Caching in LLMs?](https://towardsdatascience.com/why-care-about-promp-caching-in-llms/): link non consultato durante questa verifica. Per l'introduzione è disponibile la [versione di Maria Mouschoutzi, PhD](https://datacream.substack.com/p/why-care-about-prompt-caching-in); per prezzi e requisiti tecnici consulta i provider.
+- [Dre Dyson - articolo su cache read e Cursor](https://dredyson.com/how-i-solved-the-why-does-cursor-consume-an-absurd-amount-of-cache-read-tokens-problem-step-by-step-guide-a-complete-beginners-fix-for-reducing-millions-of-unnecessary-cache-tokens-in-cu/): lettura community non verificata; non viene usata per supportare numeri o affermazioni tecniche.
+- [Liu et al., Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/): ricerca pubblicata su *Transactions of the Association for Computational Linguistics* sull'uso di contesti lunghi.
+- [CursorBench](https://cursor.com/cursorbench): benchmark del prodotto con score, costo, token e passaggi.
+- [DeepSWE](https://deepswe.datacurve.ai/): benchmark indipendente per task di software engineering a lungo raggio.
