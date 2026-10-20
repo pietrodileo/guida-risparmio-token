@@ -576,7 +576,7 @@ Usa i benchmark per formulare ipotesi. Per capire se valgono nel tuo repository,
 4. Tempo e affidabilità.
 5. Tipo di task e metodo di valutazione.
 
-[CursorBench](https://cursor.com/cursorbench) è il benchmark più vicino al prodotto e riporta score, costi, token e passaggi. [DeepSWE](https://deepswe.datacurve.ai/) misura task di software engineering a lungo raggio. I risultati non sono direttamente confrontabili perché dataset, harness e criteri possono differire.
+[CursorBench](https://cursor.com/cursorbench) è il benchmark più vicino al prodotto e riporta score, costi, token e passaggi. [DeepSWE](https://deepswe.datacurve.ai/) misura task di software engineering a lungo raggio. Il confronto di [Artificial Analysis](https://artificialanalysis.ai/models/comparisons/claude-sonnet-5-5-low-vs-claude-opus-5-5-medium) affianca punteggi aggregati, costo stimato per task, token, velocità e finestra di contesto; l'indice include prove di coding come Terminal-Bench e SciCode. È utile per confrontare modelli, ma non misura Cursor sul tuo repository. I risultati dei tre benchmark non sono direttamente confrontabili perché dataset, harness e criteri possono differire.
 
 ### Frontiera tra costo e risultato
 
@@ -678,3 +678,4 @@ Fonti consultate dal 4 al 7 ottobre 2026. Interfacce, modelli, prezzi, modalità
 - [Liu et al., Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/): ricerca pubblicata su *Transactions of the Association for Computational Linguistics* sull'uso di contesti lunghi.
 - [CursorBench](https://cursor.com/cursorbench): benchmark del prodotto con score, costo, token e passaggi.
 - [DeepSWE](https://deepswe.datacurve.ai/): benchmark indipendente per task di software engineering a lungo raggio.
+- [Artificial Analysis - confronto tra Claude Sonnet 5.5 Low e Claude Opus 5.5 Medium](https://artificialanalysis.ai/models/comparisons/claude-sonnet-5-5-low-vs-claude-opus-5-5-medium): indice aggregato, costo stimato per task, token, velocità e finestra di contesto. Le misure dipendono dalle valutazioni e dai prezzi usati dalla piattaforma.
